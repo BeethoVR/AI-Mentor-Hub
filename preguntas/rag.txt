@@ -1,0 +1,84 @@
+PREGUNTA:
+
+explicame de forma sencilla y a profundidad lo que es un RAG
+
+RESPUESTA:
+
+TEMA: RETRIEVAL AUGMENTED GENERATION (RAG)
+
+Retrieval Augmented Generation (RAG) es un patrón fundamental en la 
+ingeniería de IA, diseñado para superar las limitaciones de la ventana 
+de contexto de los modelos de lenguaje y mejorar la calidad de sus r
+espuestas. Su propósito principal es proporcionar a un modelo de lenguaje 
+acceso a conocimiento externo relevante, permitiéndole construir respuestas 
+más precisas e informativas y mitigar las alucinaciones (Lanham).
+
+El proceso de RAG se divide en dos fases principales, como se ilustra en 
+la Figura 8.2 (Lanham):
+
+    Fase de Indexación (Preparación de Documentos): En esta etapa, los documentos 
+                        externos (como bases de código completas o múltiples libros 
+                        para asistentes de investigación) son cargados, transformados, 
+                        embebidos y almacenados en una base de datos vectorial o 
+                        similar. Esto implica convertir el texto en representaciones 
+                        numéricas (embeddings) que pueden ser buscadas eficientemente.
+    Fase de Consulta (Generación Aumentada): Una vez que los documentos están indexados, 
+                        el sistema puede ser consultado. Cuando un usuario realiza una 
+                        pregunta, el sistema RAG primero recupera la información más 
+                        relevante de los documentos almacenados. Esta información recuperada 
+                        se utiliza luego para aumentar el prompt del modelo de lenguaje, 
+                        permitiéndole generar una respuesta basada no solo en su conocimiento 
+                        pre-entrenado, sino también en el contexto específico proporcionado 
+                        por los documentos externos.
+
+Los beneficios clave de RAG incluyen la superación de las limitaciones de contexto de 
+los modelos, un uso más eficiente de la información, la mejora de la calidad de las 
+respuestas y la reducción de costos operativos. Ha sido rápidamente adoptado en una 
+amplia gama de aplicaciones, tanto de consumo como empresariales (Lanham).
+
+Es crucial diferenciar RAG del finetuning: mientras que el finetuning ayuda al modelo 
+a comprender y seguir sintaxis y estilos (es decir, la 'forma'), RAG proporciona al 
+modelo conocimiento externo para construir respuestas más precisas e informativas (es 
+decir, los 'hechos'). En resumen, 'finetuning es para la forma, y RAG es para los hechos' 
+(Lanham).
+
+Ejemplo de Código:
+
+Pseudocódigo para un flujo de trabajo RAG personalizado con LangChain:
+
+# Fase 1: Indexación de Documentos
+FUNCION indexar_documentos(ruta_documentos):
+  documentos = cargar_documentos_desde(ruta_documentos)
+  documentos_divididos = dividir_documentos_en_chunks(documentos)
+  embeddings = generar_embeddings(documentos_divididos)
+  base_datos_vectorial.almacenar(embeddings, documentos_divididos)
+  RETORNAR base_datos_vectorial
+
+# Fase 2: Consulta y Generación Aumentada
+FUNCION consultar_RAG(pregunta_usuario, base_datos_vectorial, modelo_lenguaje):
+  documentos_relevantes = base_datos_vectorial.buscar_similitud(pregunta_usuario)
+  contexto_aumentado = combinar_documentos(documentos_relevantes)
+  prompt_final = "Basado en el siguiente contexto: " + contexto_aumentado + "\n" + pregunta_usuario
+  respuesta = modelo_lenguaje.generar_respuesta(prompt_final)
+  RETORNAR respuesta
+
+# Ejemplo de uso (conceptual)
+# base_de_conocimiento = indexar_documentos("/ruta/a/mis/documentos")
+# respuesta_final = consultar_RAG("¿Cuál es el concepto clave de RAG?", base_de_conocimiento, mi_LLM)
+
+📚 Fuentes Consultadas:
+
+    Lanham (Cap. Capítulo 8): RAG: Superar limitaciones de contexto y mejorar la 
+                            calidad de respuesta
+
+    Lanham (Cap. Figura 8.2): Las dos fases de RAG: indexación y generación aumentada
+
+    Lanham (Cap. Capítulo 8): Diferencia entre RAG y Finetuning ('finetuning es 
+                            para la forma, y RAG es para los hechos')
+
+💡 Sugerencia de estudio: Para profundizar en la implementación práctica de RAG, 
+            se recomienda encarecidamente explorar el uso de frameworks como LangChain. 
+            El Ejercicio 3 del Capítulo 8 de Lanham sugiere implementar un flujo 
+            de trabajo RAG personalizado con LangChain para aplicaciones específicas, 
+            lo que proporcionará una comprensión práctica de cómo aplicar los 
+            conocimientos teóricos en un contexto real.

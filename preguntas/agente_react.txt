@@ -1,0 +1,46 @@
+PREGUNTA:
+
+Que es un agente ReAct?
+
+RESPUESTA:
+
+TEMA: AGENTE REACT
+
+Un agente ReAct es una arquitectura de agente de IA diseñada para abordar 
+tareas que requieren múltiples pasos intermedios. El nombre ReAct proviene 
+del paper de Yao et al. (2022), como se menciona en el Capítulo 6 de Huyen. 
+Para guiar a estos agentes a seguir un formato específico en sus operaciones, 
+los autores de ReAct (y Reflexion) emplean una estrategia de prompting que 
+incluye una gran cantidad de ejemplos. Este enfoque, aunque efectivo para 
+tareas complejas, puede incrementar el costo computacional de los tokens de 
+entrada y reducir el espacio de contexto disponible para otra información. 
+La generación de pensamientos, observaciones y acciones en cada paso intermedio 
+puede consumir muchos tokens, lo que aumenta el costo y la latencia percibida 
+por el usuario, especialmente en tareas con un gran número de pasos.
+
+Ejemplo de Código:
+
+Aunque el contexto no proporciona un fragmento de código Python específico 
+para un agente ReAct, el patrón operativo se describe como una secuencia de 
+'Thoughts' (pensamientos), 'Observations' (observaciones) y 'Actions' (acciones) 
+en cada paso intermedio. Este patrón se repite hasta que la tarea se completa. 
+Por ejemplo, en un pseudocódigo, podría verse así:Thought: [Razonamiento sobre 
+el siguiente paso]Observation: [Resultado de la acción anterior o información 
+del entorno]Action: [Herramienta o función a ejecutar]Thought: [Razonamiento 
+sobre el siguiente paso basado en la observación]Observation: [Resultado de 
+la nueva acción]Action: [Siguiente herramienta o función]
+
+📚 Fuentes Consultadas:
+
+    Huyen (Cap. Chapter 6: RAG and Agents): AI Agents in Action, ReAct agents, 
+    prompting strategies
+
+💡 Sugerencia de estudio: Para profundizar en los agentes ReAct, se recomienda 
+                estudiar las técnicas de 'prompt engineering' y cómo la inclusión 
+                de ejemplos en los prompts afecta el comportamiento y la eficiencia 
+                de los modelos de lenguaje. También sería beneficioso investigar 
+                el paper original de Yao et al. (2022) para comprender los fundamentos 
+                y las aplicaciones iniciales de ReAct, así como comparar ReAct 
+                con otras arquitecturas de agentes como Reflexion para entender 
+                sus ventajas y desventajas relativas en términos de rendimiento, 
+                costo y latencia.
