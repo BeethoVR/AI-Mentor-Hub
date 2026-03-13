@@ -1,0 +1,92 @@
+PREGUNTA:
+
+Me puedes explicar este codigo:
+
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv()                          
+api_key = os.getenv('OPENAI_API_KEY')
+if not api_key:                            
+    raise ValueError("No API key found. Please check your .env file.")
+client = OpenAI(api_key=api_key)                       
+def ask_chatgpt(user_message):
+    response = client.chat.completions.create(     
+        model="gpt-4-1106-preview",
+        messages=[{"role": "system",
+ "content": "You are a helpful assistant."},
+        {"role": "user", "content": user_message}],
+        temperature=0.7,
+        )
+    return response.choices[0].message.content    
+user = "What is the capital of France?"
+response = ask_chatgpt(user)               
+print(response)
+
+RESPUESTA:
+
+TEMA: INTERACCIÓN BÁSICA CON LA API DE OPENAI PARA COMPLETIONS
+
+El código proporcionado demuestra la configuración y el uso fundamental de la 
+API de OpenAI para generar completaciones de chat, siguiendo las directrices 
+de Michael Lanham. Inicialmente, se importan las librerías necesarias: os para 
+interactuar con el sistema operativo, OpenAI del paquete openai para la comunicación 
+con la API, y load_dotenv del paquete dotenv para gestionar variables de entorno. 
+Según Lanham en el Capítulo 2, es crucial cargar las variables de entorno utilizando 
+load_dotenv() para acceder de forma segura a la OPENAI_API_KEY desde un archivo .env. 
+Esta clave se recupera mediante os.getenv('OPENAI_API_KEY') y se realiza una validación 
+para asegurar su existencia, lanzando un ValueError si no se encuentra, lo cual es 
+una buena práctica de manejo de errores. Posteriormente, se inicializa el cliente 
+de OpenAI con client = OpenAI(api_key=api_key). La función ask_chatgpt(user_message) 
+encapsula la lógica para realizar la llamada a la API. Dentro de esta función, se 
+utiliza client.chat.completions.create() para enviar una solicitud de completación. 
+Los parámetros clave incluyen model, que especifica el modelo de lenguaje a utilizar 
+(en este caso, gpt-4-1106-preview, como se menciona en el contexto de Lanham para 
+GPT-4 Turbo), y messages, una lista de diccionarios que definen el rol (por ejemplo, 
+system para instrucciones generales y user para la entrada del usuario) y el contenido 
+de cada mensaje. El parámetro temperature (establecido en 0.7) controla la aleatoriedad 
+de la salida del modelo. Finalmente, la función extrae el contenido de la respuesta 
+del modelo de la primera elección (response.choices[0].message.content) y lo devuelve. 
+El ejemplo de uso muestra cómo invocar esta función con una pregunta de usuario y 
+cómo imprimir la respuesta obtenida.
+
+Ejemplo de Código:
+
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()                          
+api_key = os.getenv('OPENAI_API_KEY')
+if not api_key:                            
+    raise ValueError("No API key found. Please check your .env file.")
+client = OpenAI(api_key=api_key)                       
+
+def ask_chatgpt(user_message):
+    response = client.chat.completions.create(     
+        model="gpt-4-1106-preview",
+        messages=[{"role": "system",
+ "content": "You are a helpful assistant."},
+        {"role": "user", "content": user_message}],
+        temperature=0.7,
+        )
+    return response.choices[0].message.content    
+
+user = "What is the capital of France?"
+response = ask_chatgpt(user)               
+print(response)
+
+📚 Fuentes Consultadas:
+
+    Lanham (Cap. Chapter 2: Mastering the OpenAI API): Configuración del entorno y cliente OpenAI
+    Lanham (Cap. Chapter 2: Mastering the OpenAI API): Llamadas a la API de Completions con client.chat.completions.create
+    Lanham (Cap. Chapter 7: Assembling and using an agent platform): Uso de modelos como gpt-4-1106-preview y gestión de mensajes
+
+💡 Sugerencia de estudio: Para profundizar, se recomienda experimentar con 
+diferentes valores del parámetro temperature para observar cómo afecta la 
+creatividad y coherencia de las respuestas del modelo. Además, explore la 
+inclusión de múltiples mensajes en la lista messages para simular conversaciones 
+más complejas y entender cómo el modelo mantiene el contexto. Consulte la 
+documentación oficial de OpenAI para conocer otros parámetros disponibles 
+en la función create y cómo pueden ser utilizados para afinar el comportamiento 
+del modelo.

@@ -1,0 +1,47 @@
+PREGUNTA:
+
+    Como crear un agente sencillo? Y dame un ejemplo de codigo
+
+RESPUESTA:
+
+TEMA: CREACIÓN Y COMPONENTES DE UN AGENTE DE IA
+
+Un agente de IA se define como cualquier entidad capaz de percibir su entorno 
+y actuar sobre él. Su caracterización depende del entorno en el que opera y 
+del conjunto de acciones que puede realizar. Los agentes se construyen sobre 
+conceptos como la autocrítica, el encadenamiento de pensamientos (chain-of-thought) 
+y las salidas estructuradas, que ya han sido abordados en el libro de Lanham. 
+Los cinco componentes principales de un sistema de agente único, según la 
+Figura 1.3 de Lanham, son:
+
+    Persona y Perfil: La persona representa el rol o función principal del agente, 
+                    típicamente definido en un 'system prompt'. El perfil describe 
+                    el sistema completo del agente.
+
+    Acciones y Uso de Herramientas: Las acciones representan una función o herramienta 
+                    que el agente puede utilizar.
+
+    Razonamiento y Evaluación: Estos componentes fundamentan al agente y le permiten 
+                    tomar mejores decisiones.
+
+    Memoria y Conocimiento: Proporcionan contexto adicional al agente para una solicitud 
+                    o tarea específica.
+
+    Planificación y Retroalimentación: Permiten al agente aprender y mejorar en la 
+                    realización de tareas.
+
+El contexto proporcionado describe la naturaleza y los componentes de un agente, pero 
+no detalla un proceso paso a paso para su creación ni incluye un ejemplo de código 
+específico para implementar un agente sencillo.
+
+📚 Fuentes Consultadas:
+
+    AI Agents in Action (Cap. Agents): Definición de Agente
+    AI Agents in Action (Cap. Figure 1.3): Cinco componentes principales de un sistema 
+                                            de agente único
+
+💡 Sugerencia de estudio: Para profundizar en la creación práctica y ejemplos de 
+                        código de agentes de IA, se recomienda consultar el libro 
+                        completo 'AI Agents in Action' de Michael Lanham, especialmente 
+                        los capítulos que aborden la implementación y patrones de 
+                        diseño de agentes.

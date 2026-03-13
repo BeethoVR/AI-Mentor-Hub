@@ -1,0 +1,38 @@
+# =========================
+# Seguridad y Secretos
+# =========================
+.env
+.env.*
+*.key
+secrets.toml
+
+# =========================
+# Entorno Virtual y Paquetes
+# =========================
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# =========================
+# Caché de Pruebas (Pytest)
+# =========================
+.pytest_cache/
+.coverage
+
+# =========================
+# Datos y Vectores Locales
+# =========================
+# Ignoramos el JSON generado para no subir megas de vectores a GitHub
+data/processed_docs.json
+
+# (Opcional) Descomenta la siguiente línea si no quieres subir los PDFs originales
+# data/*.pdf
+
+# =========================
+# Archivos del Sistema Operativo
+# =========================
+.DS_Store
+._.DS_Store
