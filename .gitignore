@@ -36,3 +36,11 @@ data/processed_docs.json
 # =========================
 .DS_Store
 ._.DS_Store
+
+# =========================
+#  Pruebas on otras tecnologías en mi PC
+# =========================
+src/chromadb_ingestion.py
+src/chromadb_rag_base.py
+src/google_ingestion_rompe_limite_free.py
+
