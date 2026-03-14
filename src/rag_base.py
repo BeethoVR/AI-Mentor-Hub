@@ -17,19 +17,19 @@ def consultar_mentor(vector_db, pregunta: str):
         client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
         prompt = f"""
-        Eres el AI-Mentor Hub, un experto en Ingeniería de IA y Agentes Autónomos.
-        Basa tu respuesta estrictamente en los libros de Chip Huyen y Michael Lanham.
+        You are a AI-Mentor Hub, an expert in AI Engineering and Autonomous Agents.
+        Base your answer strictly on the books by Chip Huyen and Michael Lanham.
         
-        CONTEXTO TÉCNICO EXTRAÍDO:
+        TECHNICAL CONTEXT EXTRACTED:
         {contexto}
         
-        PREGUNTA DEL ESTUDIANTE:
+        STUDENT'S QUESTION:
         {pregunta}
         
-        INSTRUCCIONES:
-        1. Responde de forma técnica y profesional.
-        2. Cita el libro o autor si la información está en el contexto.
-        3. Si la respuesta requiere código o explicar un patrón (ej. ReAct), documéntalo claramente.
+        INSTRUCTIONS:
+        1. Answer in a technical and professional manner.
+        2. Cite the book or author if the information is in the context.
+        3. If the answer requires code or explaining a pattern (e.g. ReAct), document it clearly. And if there's something not in the information, say it clearly.
         """
 
         # 3. Generación usando Structured Outputs nativos de la nueva API
@@ -44,6 +44,9 @@ def consultar_mentor(vector_db, pregunta: str):
         )
         
         # 4. Validación Final
+        if response.text is None:
+            raise ValueError("La respuesta del modelo no contiene texto.")
+        
         return RespuestaMentor.model_validate_json(response.text)
 
     except Exception as e:
