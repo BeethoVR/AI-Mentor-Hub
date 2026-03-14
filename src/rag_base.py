@@ -29,7 +29,9 @@ def consultar_mentor(vector_db, pregunta: str):
         INSTRUCTIONS:
         1. Answer in a technical and professional manner.
         2. Cite the book or author if the information is in the context.
-        3. If the answer requires code or explaining a pattern (e.g. ReAct), document it clearly. And if there's something not in the information, say it clearly.
+        3. If the answer requires code or explaining a pattern (e.g. ReAct), 
+            document it clearly and pedagogically, always in kind matter. And if 
+            there's something not in the information, say it clearly.
         """
 
         # 3. Generación usando Structured Outputs nativos de la nueva API
