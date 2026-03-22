@@ -29,7 +29,8 @@ __pycache__/
 data/processed_docs.json
 
 # (Opcional) Descomenta la siguiente línea si no quieres subir los PDFs originales
-# data/*.pdf
+data/*.pdf
+data/*.json
 
 # =========================
 # Archivos del Sistema Operativo
@@ -44,3 +45,14 @@ src/chromadb_ingestion.py
 src/chromadb_rag_base.py
 src/google_ingestion_rompe_limite_free.py
 
+
+requirements_pip.txt
+src/app_01.py
+src/app_01_trabajando_con_2_libros_fijo.py
+src/analisis_mentor_hub.txt
+tests/main_muestra.py
+
+# =========================
+# Claude Code (IDE local)
+# =========================
+.claude/*
