@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from ingestion import setup_vector_db
+from src.ingestion_01 import setup_vector_db
 from rag_base import consultar_mentor
 from google import genai
 

@@ -27,6 +27,8 @@ PDFs (data/)
 | `tests/test_rag.py` | Tests for `consultar_mentor()` |
 | `tests/test_schemas.py` | Tests for Pydantic schema validation |
 | `conftest.py` | Injects `src/` into `sys.path` for all tests |
+| `opencode.json` | OpenCode default model configuration |
+| `CODE_ANALYSIS.md` | Full code analysis report with issues and fixes |
 
 ## How to Run
 ```bash
@@ -47,6 +49,12 @@ pytest tests/
 ## Environment Variables
 - `GOOGLE_API_KEY` — Gemini API key (required). Load from `.env` via `python-dotenv`.
 - `.env` is gitignored. Never commit it.
+
+## Current Session Status (2026-03-23)
+- ✅ Complete code analysis performed
+- ✅ `opencode.json` created with `opencode/minimax-m2.5-free` as default model
+- ✅ `CODE_ANALYSIS.md` created documenting all issues found
+- ⏳ Pending fixes listed in `TODO.md`
 
 ## Important Constraints / Known Issues
 
@@ -96,3 +104,8 @@ These files are intentionally ignored but preserved for study:
 - UI strings and comments: Spanish
 - Docstrings and core logic: mix of Spanish/English (do not refactor language unless asked)
 - Pydantic field descriptions: English
+
+## Related Documentation
+- `CODE_ANALYSIS.md` — Full analysis report with issues categorized by severity
+- `TODO.md` — Pending tasks and fixes prioritized by importance
+- `PROGRESS.md` — Development history and session log

@@ -44,7 +44,7 @@ data/*.json
 src/chromadb_ingestion.py
 src/chromadb_rag_base.py
 src/google_ingestion_rompe_limite_free.py
-
+src/*_01*.py
 
 requirements_pip.txt
 src/app_01.py
@@ -55,4 +55,15 @@ tests/main_muestra.py
 # =========================
 # Claude Code (IDE local)
 # =========================
-.claude/*
+.claude/
+CLAUDE.md
+CODE_ANALYSIS.md
+Generative AI with LangChain - Dr. Priyanka.pdf
+PROGRESS.md
+TODO.md
+opencode.json
+requirements_pip.txt
+
+src/chromadb_*.py
+src/google_ingestion_rompe_limite_free.py
+src/ingestion_01.py

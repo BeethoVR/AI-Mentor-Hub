@@ -16,9 +16,12 @@ def consultar_mentor(vector_db, pregunta: str):
         # El cliente busca automáticamente os.getenv("GEMINI_API_KEY") o "GOOGLE_API_KEY"
         client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
+        #AI Engineering and Autonomous Agents
         prompt = f"""
-        You are a AI-Mentor Hub, an expert in AI Engineering and Autonomous Agents.
-        Base your answer strictly on the books by Chip Huyen and Michael Lanham.
+        You are a AI-Mentor Hub, an expert in the material that is saved/uploaded
+        in this RAG/database.
+        Base your answer strictly on the books and documents that we have upload in 
+        the RAG/database.
         
         TECHNICAL CONTEXT EXTRACTED:
         {contexto}
@@ -27,21 +30,24 @@ def consultar_mentor(vector_db, pregunta: str):
         {pregunta}
         
         INSTRUCTIONS:
-        1. Answer in a technical and professional manner.
-        2. Cite the book or author if the information is in the context.
+        1. Answer in a technical and professional manner, using the information 
+            from the context and all the books/documents in the RAG/database.
+        2. Cite the book(s) or author(s) if the information is in the context.
         3. If the answer requires code or explaining a pattern (e.g. ReAct), 
             document it clearly and pedagogically, always in kind matter. And if 
             there's something not in the information, say it clearly.
+        4. If you have some code to improve the axplaination, please provide it 
+            in a code block with the language specified (e.g. ```python).        
         """
 
         # 3. Generación usando Structured Outputs nativos de la nueva API
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.1-flash-lite-preview', # 'gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=RespuestaMentor, # Inyección directa del contrato
-                temperature=0.2, # Baja temperatura para que sea analítico, no creativo
+                temperature=0.2, # low temperature to be analytical, not creative
             ),
         )
         
@@ -52,4 +58,6 @@ def consultar_mentor(vector_db, pregunta: str):
         return RespuestaMentor.model_validate_json(response.text)
 
     except Exception as e:
+        if "EXCEEDED_QUOTA" in str(e):
+            return "Error: Se ha excedido la cuota de la API. Por favor, revisa tu uso y límites."
         return f"Error en la consulta (RAG): {str(e)}"
