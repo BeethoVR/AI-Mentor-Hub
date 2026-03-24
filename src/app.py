@@ -3,12 +3,14 @@ import os
 import shutil
 from dotenv import load_dotenv
 
-# Importamos tu lógica de backend de la Fase 1
-from ingestion import setup_vector_db
-from rag_base import consultar_mentor
-
 from langchain_google_genai import ChatGoogleGenerativeAI
-from guardrails import validar_pregunta
+
+# --- Importaciones de tu Arquitectura Limpia ---
+from config import DATA_DIR, MODELO_AGENTE 
+from core.ingestion import setup_vector_db # (O como se llame tu función de indexar)
+from core.rag_base import consultar_mentor
+from core.guardrails import validar_pregunta
+from core.agents import ejecutar_agente
 
 # 1. CONFIGURACIÓN INICIAL
 st.set_page_config(
@@ -19,7 +21,7 @@ st.set_page_config(
 load_dotenv()
 
 # Rutas de persistencia
-DATA_DIR = "data"
+#DATA_DIR = "data"
 JSON_DB = os.path.join(DATA_DIR, "processed_docs.json")
 
 if not os.path.exists(DATA_DIR):
@@ -41,27 +43,28 @@ def load_active_db():
     return None
 
 @st.cache_data(show_spinner=False)
-def generar_titulo_tema(archivos: tuple) -> str:
+def generar_titulo_tema(archivos: tuple) -> str | None:
     """Genera un título dinámico usando Gemini basado en los documentos."""
     if not archivos:
         return "Conocimiento General"
     
     try:
         # Usamos una temperatura baja (0.3) para que sea directo y conciso
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+        llm = ChatGoogleGenerativeAI(model=MODELO_AGENTE, temperature=0.3)
         lista_nombres = ", ".join(archivos)
         
         prompt = (
-            f"Basado en los siguientes nombres de documentos, genera un título "
-            f"atractivo y muy corto (máximo 4 palabras) que describa el tema general "
-            f"de esta biblioteca. Responde ÚNICAMENTE con el título, sin comillas "
-            f"ni explicaciones. Documentos: {lista_nombres}"
+            f"Based in the names of the loaded documents, generate a very "
+            f"attractive/nice and short title (max 4 words) that describes the "
+            f"general theme of this library. Answered ONLY with the title, " 
+            f"no quotes or explanations. Documents: {lista_nombres}"
         )
         
         respuesta = llm.invoke(prompt)
-        return respuesta.content.strip()
+        title = respuesta.content.strip() # type: ignore
+        return f"{title}" if title else "Biblioteca Activa (AI API out line)"
     except Exception as e:
-        return "Biblioteca Activa" # Fallback en caso de error de red
+        return "Biblioteca Activa (AI API out line)" # Fallback en caso de error de red
     
 def save_uploaded_files(uploaded_files):
     """Guarda archivos físicos y fuerza re-indexación"""
@@ -77,31 +80,68 @@ def save_uploaded_files(uploaded_files):
 # Carga inicial al abrir la app
 vector_db = load_active_db()
 
+# Inicializamos la llave del uploader si no existe
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
 # 3. BARRA LATERAL (Gestión de Conocimiento)
 with st.sidebar:
     st.title("⚙️ Configuración")
     
     st.subheader("📁 Cargar Documentos")
-    new_files = st.file_uploader(
-        "Añade PDFs a tu biblioteca", 
-        type="pdf", 
-        accept_multiple_files=True,
-        help="Los archivos se indexarán localmente en tu PC."
-    )
+    uploaded_files = st.file_uploader(
+                                    "Añade PDFs a tu biblioteca", 
+                                    type="pdf", 
+                                    accept_multiple_files=True,
+                                    help="Los archivos se indexarán localmente en tu PC.",
+                                    key=f"uploader_{st.session_state.uploader_key}" # to remove after upload and trigger re-render
+                                )
     
-    if st.button("🚀 Indexar Contenido", use_container_width=True):
-        if new_files:
-            with st.spinner("Procesando y vectorizando nuevos documentos..."):
-                for f in new_files:
-                    with open(os.path.join(DATA_DIR, f.name), "wb") as buffer:
-                        buffer.write(f.getbuffer())
+    if st.button("🚀 Procesar y Aprender", use_container_width=True):
+        if uploaded_files:
+            new_files = []
+            old_files = []
+            
+            # 1. Aseguramos que la carpeta data/ exista
+            os.makedirs(DATA_DIR, exist_ok=True)
+            
+            # 2. Filtramos y guardamos solo los archivos nuevos
+            for f in uploaded_files:
+                file_route = os.path.join(DATA_DIR, f.name)
                 
-                # Simplemente lo llamas. El script detectará qué es nuevo.
-                vector_db = setup_vector_db() 
-                
-                st.cache_resource.clear()
-                st.success("¡Biblioteca actualizada!")
-                st.rerun()
+                # Comprobamos si el archivo ya existe físicamente en la carpeta
+                if os.path.exists(file_route):
+                    old_files.append(f.name)
+                else:
+                    # Si no existe, lo guardamos en el disco
+                    with open(file_route, "wb") as f_uploaded:
+                        f_uploaded.write(f.getbuffer())
+                    new_files.append(f.name)
+            
+            # 3. Damos feedback inmediato sobre los repetidos
+            if old_files:
+                old_names = ", ".join(old_files)
+                st.warning(f"⚠️ Documentos ignorados (ya existían): {old_names}")
+            
+            # 4. Solo ejecutamos la ingesta pesada si hay archivos nuevos
+            if new_files:
+                with st.spinner("Procesando nuevos documentos..."):
+                    for f in new_files:
+                        with open(os.path.join(DATA_DIR, f.name), "wb") as buffer:
+                            buffer.write(f.getbuffer())
+                    
+                    # Simplemente lo llamas. El script detectará qué es nuevo.
+                    vector_db = setup_vector_db() 
+                    
+                    st.cache_resource.clear()
+                    st.success("¡Biblioteca actualizada!")
+
+                    # 3. EL TRUCO DE UX:
+                    # Cambiamos la llave para forzar que el uploader se vacíe
+                    st.session_state.uploader_key += 1
+
+                    # Refrescamos la interfaz para que el cambio sea inmediato
+                    st.rerun()
         else:
             st.warning("Selecciona archivos primero.")
 
@@ -109,7 +149,7 @@ with st.sidebar:
 
     # Mostrar documentos actuales en la BD y el Tema Generado
     st.subheader("📚 Biblioteca Actual")
-    
+     
     # Obtenemos los archivos físicos como fuente de verdad
     archivos_en_data = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')] if os.path.exists(DATA_DIR) else []
     
@@ -119,15 +159,18 @@ with st.sidebar:
         
         # 2. Pintamos el tema con un diseño destacado
         st.markdown(f"✨ **Tema detectado:** \n*{tema_generado}*")
-        
-        # 3. Listamos los documentos debajo
-        st.divider()
-        # Beetho: Elimine esta sección, porque me duplicaba el listado de libros
-        #if archivos_en_data:
-        #    for f in archivos_en_data:
-        #        st.caption(f"✅ {f}")
+
     else:
         st.info("No hay documentos cargados.")
+
+    st.divider()
+    st.subheader("⚙️ Modo de Operación")
+    
+    modo_respuesta = st.radio("Selecciona el \"cerebro\" a utilizar:",
+                             ["👨‍🏫 Mentor Local (PDFs)", "🕵️‍♂️ Investigador Web (Agente)"],
+                             help="El Mentor lee tus libros. El Investigador busca en internet"
+                            )
+    st.divider()
 
     if vector_db:
         # Intentamos obtener los documentos del objeto vector_db
@@ -135,7 +178,7 @@ with st.sidebar:
         # la forma de acceder cambia. Probemos con esta que es la más común:
         try:
             # Si vector_db es una lista de documentos o tiene el atributo .docs
-            docs_actuales = vector_db.docs if hasattr(vector_db, 'docs') else []
+            docs_actuales = vector_db.docs if hasattr(vector_db, 'docs') else [] # type: ignore
             
             if docs_actuales:
                 sources = list(set([os.path.basename(doc.metadata.get('source', 'Desconocido')) for doc in docs_actuales]))
@@ -232,26 +275,40 @@ if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
                 st.session_state.messages.append({"role": "assistant", "content": mensaje_rechazo})
             
             else:
-                # --- CAPA 2: EJECUCIÓN DEL RAG ---
-                with st.spinner("📚 Consultando tu biblioteca personal..."):
-                    respuesta = consultar_mentor(vector_db, prompt)
+                # --- CAPA 2: EJECUCIÓN DEL FLUJO ELEGIDO ---
+                if modo_respuesta == "👨‍🏫 Mentor Local (PDFs)":
+                    # --- CAPA 2: EJECUCIÓN DEL RAG ---
+                    with st.spinner("📚 Consultando tu biblioteca personal..."):
+                        respuesta = consultar_mentor(vector_db, prompt)
+                        
+                        # (Aquí va tu lógica de formateo de respuesta Pydantic de la Fase 1)
+                        if isinstance(respuesta, str):
+                            st.error(respuesta)
+                            full_response = respuesta
+                        else:
+                            full_response = f"### {respuesta.tema}\n\n"
+                            full_response += f"{respuesta.explicacion_tecnica}\n\n"
+                            
+                            if respuesta.codigo_ejemplo:
+                                full_response += f"**💻 Ejemplo de código:**\n```python\n{respuesta.codigo_ejemplo}\n```\n\n"
+                            
+                            full_response += "**📖 Referencias encontradas:**\n"
+                            for ref in respuesta.referencias:
+                                full_response += f"- *{ref.libro}* (Cap. {ref.capitulo}): {ref.concepto_clave}\n"
+                            
+                            full_response += f"\n\n> 💡 **Sugerencia:** {respuesta.sugerencia_estudio}"
+                            
+                            st.markdown(full_response)
+                        
+                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+                elif modo_respuesta == "🕵️‍♂️ Investigador Web (Agente)":
+                    with st.spinner("🕵️‍♂️ El Agente está investigando en la web..."):
+                        
+                        # Llamamos a la función encapsulada que nos devuelve un string limpio
+                        full_response = ejecutar_agente(prompt)
+                        
+                        # Imprimimos en la interfaz
+                        st.markdown(f"**🌐 Respuesta del Investigador:**\n\n{full_response}")
+                        st.session_state.messages.append({"role": "assistant", "content": f"**🌐 Respuesta del Investigador:**\n\n{full_response}"})    
                     
-                    # (Aquí va tu lógica de formateo de respuesta Pydantic de la Fase 1)
-                    if isinstance(respuesta, str):
-                        st.error(respuesta)
-                    else:
-                        full_response = f"### {respuesta.tema}\n\n"
-                        full_response += f"{respuesta.explicacion_tecnica}\n\n"
-                        
-                        if respuesta.codigo_ejemplo:
-                            full_response += f"**💻 Ejemplo de código:**\n```python\n{respuesta.codigo_ejemplo}\n```\n\n"
-                        
-                        full_response += "**📖 Referencias encontradas:**\n"
-                        for ref in respuesta.referencias:
-                            full_response += f"- *{ref.libro}* (Cap. {ref.capitulo}): {ref.concepto_clave}\n"
-                        
-                        full_response += f"\n\n> 💡 **Sugerencia:** {respuesta.sugerencia_estudio}"
-                        
-                        st.markdown(full_response)
-                    
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})

@@ -2,7 +2,6 @@
 # Seguridad y Secretos
 # =========================
 .env
-.env.*
 *.key
 secrets.toml
 
@@ -67,3 +66,6 @@ requirements_pip.txt
 src/chromadb_*.py
 src/google_ingestion_rompe_limite_free.py
 src/ingestion_01.py
+src/other/
+data_utel/
+
