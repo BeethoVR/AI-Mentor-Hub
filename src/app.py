@@ -43,7 +43,7 @@ def load_active_db():
     return None
 
 @st.cache_data(show_spinner=False)
-def generar_titulo_tema(archivos: tuple) -> str | None:
+def generar_titulo_tema(archivos: tuple) -> str:
     """Genera un título dinámico usando Gemini basado en los documentos."""
     if not archivos:
         return "Conocimiento General"
@@ -61,10 +61,26 @@ def generar_titulo_tema(archivos: tuple) -> str | None:
         )
         
         respuesta = llm.invoke(prompt)
-        title = respuesta.content.strip() # type: ignore
-        return f"{title}" if title else "Biblioteca Activa (AI API out line)"
+        # --- EXTRACCIÓN ROBUSTA (Manejo de Multimodalidad) ---
+        raw_content = respuesta.content
+        
+        if isinstance(raw_content, list) and len(raw_content) > 0 and isinstance(raw_content[0], dict):
+            # Si es una lista de bloques, extraemos el texto del diccionario
+            title = raw_content[0].get('text', str(raw_content)).strip()
+        elif isinstance(raw_content, str):
+            # Si LangChain ya lo parseó como string, lo limpiamos directo
+            title = raw_content.strip()
+        else:
+            # Fallback de seguridad
+            title = str(raw_content).strip()
+        # ----------------------------------------------------
+        
+        # Limpiamos posibles comillas que a veces el modelo añade por terquedad
+        title = title.replace('"', '').replace("'", "")
+        
+        return f"{title}" if title else "Biblioteca Activa (AI API fail)"
     except Exception as e:
-        return "Biblioteca Activa (AI API out line)" # Fallback en caso de error de red
+        return str(e) #"Biblioteca Activa (AI API out line)" # Fallback en caso de error de red
     
 def save_uploaded_files(uploaded_files):
     """Guarda archivos físicos y fuerza re-indexación"""
@@ -116,7 +132,7 @@ with st.sidebar:
                     # Si no existe, lo guardamos en el disco
                     with open(file_route, "wb") as f_uploaded:
                         f_uploaded.write(f.getbuffer())
-                    new_files.append(f.name)
+                    new_files.append(f)
             
             # 3. Damos feedback inmediato sobre los repetidos
             if old_files:
@@ -148,17 +164,28 @@ with st.sidebar:
     st.divider()
 
     # Mostrar documentos actuales en la BD y el Tema Generado
-    st.subheader("📚 Biblioteca Actual")
+    st.header("📚 Biblioteca Actual")
      
     # Obtenemos los archivos físicos como fuente de verdad
     archivos_en_data = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')] if os.path.exists(DATA_DIR) else []
     
     if vector_db and archivos_en_data:
-        # 1. El LLM decide el tema (usamos tuple para que el caché funcione)
-        tema_generado = generar_titulo_tema(tuple(archivos_en_data))
-        
-        # 2. Pintamos el tema con un diseño destacado
-        st.markdown(f"✨ **Tema detectado:** \n*{tema_generado}*")
+        # 1. Generamos el tema dinámico si no existe en la memoria
+        if "tema_biblioteca" not in st.session_state or "Biblioteca Activa" in st.session_state.tema_biblioteca:
+            # Aquí asumimos que vector_db ya está inicializado. 
+            # Si tienes una función para obtenerlo, úsala, por ejemplo: get_vector_db()
+            try:
+                with st.spinner("Analizando temática de los PDFs..."):
+                    tema = generar_titulo_tema(tuple(archivos_en_data))
+                    print(tema)
+                    st.session_state.tema_biblioteca = tema
+                    
+            except Exception:
+                # Fallback por si la base de datos está vacía al iniciar
+                st.session_state.tema_biblioteca = "Sube documentos para analizar su contenido."
+
+        # 2. Imprimimos el valor dinámico, NUNCA un texto fijo
+        st.info(f"**Tema detectado:**\n{st.session_state.tema_biblioteca}")
 
     else:
         st.info("No hay documentos cargados.")
@@ -173,25 +200,16 @@ with st.sidebar:
     st.divider()
 
     if vector_db:
-        # Intentamos obtener los documentos del objeto vector_db
-        # Dependiendo de si usas FAISS, Chroma o una lista simple, 
-        # la forma de acceder cambia. Probemos con esta que es la más común:
+        # Leemos directamente los archivos en la carpeta data/
         try:
-            # Si vector_db es una lista de documentos o tiene el atributo .docs
-            docs_actuales = vector_db.docs if hasattr(vector_db, 'docs') else [] # type: ignore
-            
-            if docs_actuales:
-                sources = list(set([os.path.basename(doc.metadata.get('source', 'Desconocido')) for doc in docs_actuales]))
-                for s in sources:
-                    st.caption(f"✅ {s}")
+            # Intentamos leer directamente los archivos en la carpeta data
+            files = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')]
+            if files:
+                for f in files:
+                    st.caption(f"✅ {f}")
             else:
-                # Si no hay .docs, intentamos leer directamente los archivos en la carpeta data
-                files = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')]
-                if files:
-                    for f in files:
-                        st.caption(f"✅ {f}")
-                else:
-                    st.info("Información cargada desde JSON (fuentes no visibles).")
+                st.info("No hay informacion de documentos cargados.")
+
         except Exception as e:
             st.caption("Conectado a la base de conocimientos.")
     else:
@@ -226,10 +244,10 @@ with st.sidebar:
 # 4. INTERFAZ DE CHAT PRINCIPAL
 # Título dinámico
 if vector_db:
-    st.title("🧠 Personal AI-Mentor")
+    st.title("🧠 AI Mentor Hub")
     st.caption("Consultando tu biblioteca personal de documentos.")
 else:
-    st.title("📚 Bienvenido a tu Notebook AI")
+    st.title("📚 Bienvenido a tu Biblioteca AI")
     st.markdown("Carga archivos PDF en la barra lateral para comenzar a chatear con tus datos.")
 
 st.divider()

@@ -1,18 +1,22 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+
 from tools.web_search import herramienta_web
+from tools.wikipedia_search import herramienta_wiki
+from tools.arxiv_search import herramienta_arxiv
 
 from config import MODELO_AGENTE
 
-# Lista de herramientas disponibles para el agente
-herramientas = [herramienta_web]
 
-# --- 2. CONFIGURACIÓN DEL AGENTE REACT CON LANGGRAPH ---
-
+# --- CONFIGURACIÓN DEL AGENTE REACT CON LANGGRAPH ---
 def inicializar_agente_investigador():
     """
     Crea un agente ReAct usando LangGraph y herramientas personalizadas.
     """
+
+    # Lista de herramientas disponibles para el agente
+    herramientas = [herramienta_web, herramienta_wiki, herramienta_arxiv]
+
     llm = ChatGoogleGenerativeAI(
         model=MODELO_AGENTE, 
         temperature=0.0
@@ -31,6 +35,7 @@ def ejecutar_agente(pregunta: str) -> str:
     agente = inicializar_agente_investigador()
     
     # 2. Invocamos al agente
+    pregunta += ", get back the source reference at the end (URL, Wikipedia title or ArXiv Articule)."
     respuesta_agente = agente.invoke({"messages": [("user", pregunta)]})
     
     # 3. Extraemos el contenido crudo

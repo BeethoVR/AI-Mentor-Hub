@@ -1,7 +1,7 @@
 import os
 from google import genai
 from google.genai import types
-from .schemas import RespuestaMentor
+from contracts.schemas import RespuestaMentor
 
 from config import MODELO_AGENTE
 
