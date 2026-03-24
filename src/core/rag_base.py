@@ -3,12 +3,17 @@ from google import genai
 from google.genai import types
 from contracts.schemas import RespuestaMentor
 
+from core.exceptions import RAGQueryError, QuotaExceededError, APIServiceUnavailableError
 from config import MODELO_AGENTE
 
 def consultar_mentor(vector_db, pregunta: str):
     """
     Realiza la búsqueda semántica y genera la respuesta con la nueva API de Gemini.
     """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise RAGQueryError("GOOGLE_API_KEY no está configurada. Por favor, configura tu API key en el archivo .env")
+    
     try:
         # 1. Retrieval: Buscar en el índice DocArray
         docs = vector_db.similarity_search(pregunta, k=4)
@@ -16,7 +21,7 @@ def consultar_mentor(vector_db, pregunta: str):
 
         # 2. Inicializar el NUEVO cliente de Gemini
         # El cliente busca automáticamente os.getenv("GEMINI_API_KEY") o "GOOGLE_API_KEY"
-        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        client = genai.Client(api_key=api_key)
 
         #AI Engineering and Autonomous Agents
         prompt = f"""
@@ -59,8 +64,8 @@ def consultar_mentor(vector_db, pregunta: str):
 
     except Exception as e:
         if ("EXCEEDED_QUOTA" in str(e)) or ("RESOURCE_EXHAUSTED" in str(e)):
-            return "Error: Se ha excedido la cuota de la API. Por favor, revisa tu uso y límites."
+            raise QuotaExceededError("Se ha excedido la cuota de la API. Por favor, revisa tu uso y límites.")
         elif "UNAVAILABLE" in str(e):
-            return "Error: El servicio de la API no está disponible en este momento. Por favor, intenta nuevamente más tarde."
+            raise APIServiceUnavailableError("El servicio de la API no está disponible en este momento. Por favor, intenta nuevamente más tarde.")
         
-        return f"Error en la consulta (RAG): {str(e)}"
+        raise RAGQueryError(f"Error en la consulta (RAG): {str(e)}")

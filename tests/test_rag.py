@@ -1,9 +1,11 @@
 import pytest
-from unittest.mock import MagicMock
+import os
+from unittest.mock import MagicMock, patch
 
-# CAMBIO AQUÍ: Quitamos el "src." para que coincida con el entorno real
-from rag_base import consultar_mentor
-from schemas import RespuestaMentor
+os.environ["GOOGLE_API_KEY"] = "test-api-key"
+
+from core.rag_base import consultar_mentor
+from contracts.schemas import RespuestaMentor
 
 def test_consultar_mentor_exitoso(mocker):
     # 1. Mock de la Base de Datos Vectorial
@@ -12,9 +14,8 @@ def test_consultar_mentor_exitoso(mocker):
     mock_doc.page_content = "Texto simulado del libro de Michael Lanham sobre Agentes."
     mock_vector_db.similarity_search.return_value = [mock_doc]
 
-    # 2. Mock del Cliente de Gemini (OJO AL CAMBIO DEL MOCK PATH)
-    # Como quitamos "src.", también debemos quitarlo de la ruta del patch
-    mock_client_class = mocker.patch('rag_base.genai.Client')
+    # 2. Mock del Cliente de Gemini
+    mock_client_class = mocker.patch('core.rag_base.genai.Client')
     mock_client_instance = mock_client_class.return_value
     
     mock_response = MagicMock()
@@ -36,3 +37,32 @@ def test_consultar_mentor_exitoso(mocker):
     assert isinstance(resultado, RespuestaMentor)
     assert resultado.tema == "Agentes"
     mock_vector_db.similarity_search.assert_called_once_with("¿Qué es un agente?", k=4)
+
+
+def test_consultar_mentor_sin_api_key(mocker):
+    """Test que verifica el manejo cuando GOOGLE_API_KEY no está configurada."""
+    # Guardar el valor original
+    original_key = os.environ.get("GOOGLE_API_KEY")
+    
+    try:
+        # Eliminar la variable de entorno
+        if "GOOGLE_API_KEY" in os.environ:
+            del os.environ["GOOGLE_API_KEY"]
+        
+        # Importar y probar - debe lanzar error antes de hacer任何事
+        from core import rag_base
+        # Recargar el módulo para que tome el nuevo entorno
+        import importlib
+        importlib.reload(rag_base)
+        
+        with pytest.raises(Exception) as exc_info:
+            # Create a mock vector_db
+            mock_vec = MagicMock()
+            mock_vec.similarity_search.return_value = []
+            rag_base.consultar_mentor(mock_vec, "test question")
+        
+        assert "GOOGLE_API_KEY" in str(exc_info.value)
+    finally:
+        # Restaurar el valor original
+        if original_key:
+            os.environ["GOOGLE_API_KEY"] = original_key

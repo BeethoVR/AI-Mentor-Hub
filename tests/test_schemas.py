@@ -1,5 +1,5 @@
 import pytest
-from schemas import RespuestaMentor, ReferenciaBibliografica
+from contracts.schemas import RespuestaMentor, Referencia
 
 def test_respuesta_mentor_valida():
     # Simulamos un JSON perfecto que devolvería Gemini

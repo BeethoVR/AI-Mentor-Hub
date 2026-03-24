@@ -3,14 +3,19 @@ import os
 import shutil
 from dotenv import load_dotenv
 
+from config import setup_logging
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+logger = setup_logging(__name__)
 
 # --- Importaciones de tu Arquitectura Limpia ---
 from config import DATA_DIR, MODELO_AGENTE 
-from core.ingestion import setup_vector_db # (O como se llame tu función de indexar)
+from core.ingestion import setup_vector_db
 from core.rag_base import consultar_mentor
+from core.rag_base import RAGQueryError, QuotaExceededError, APIServiceUnavailableError
 from core.guardrails import validar_pregunta
 from core.agents import ejecutar_agente
+from tools.security import validate_uploaded_files
 
 # 1. CONFIGURACIÓN INICIAL
 st.set_page_config(
@@ -36,11 +41,15 @@ def load_active_db():
     2. De los PDFs si no hay JSON
     3. Retorna None si está vacío
     """
-    if os.path.exists(JSON_DB):
-        return setup_vector_db()
-    elif os.path.exists(DATA_DIR) and any(f.endswith('.pdf') for f in os.listdir(DATA_DIR)):
-        return setup_vector_db()
-    return None
+    try:
+        if os.path.exists(JSON_DB):
+            return setup_vector_db()
+        elif os.path.exists(DATA_DIR) and any(f.endswith('.pdf') for f in os.listdir(DATA_DIR)):
+            return setup_vector_db()
+        return None
+    except Exception as e:
+        st.error(f"Error al cargar la base de conocimientos: {e}")
+        return None
 
 @st.cache_data(show_spinner=False)
 def generar_titulo_tema(archivos: tuple) -> str:
@@ -82,16 +91,6 @@ def generar_titulo_tema(archivos: tuple) -> str:
     except Exception as e:
         return str(e) #"Biblioteca Activa (AI API out line)" # Fallback en caso de error de red
     
-def save_uploaded_files(uploaded_files):
-    """Guarda archivos físicos y fuerza re-indexación"""
-    for uploaded_file in uploaded_files:
-        file_path = os.path.join(DATA_DIR, uploaded_file.name)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-    
-    # Limpiamos el caché para que setup_vector_db procese lo nuevo
-    st.cache_resource.clear()
-    return setup_vector_db()
 
 # Carga inicial al abrir la app
 vector_db = load_active_db()
@@ -115,49 +114,58 @@ with st.sidebar:
     
     if st.button("🚀 Procesar y Aprender", use_container_width=True):
         if uploaded_files:
-            new_files = []
-            old_files = []
+            valid_files, validation_errors = validate_uploaded_files(uploaded_files)
             
-            # 1. Aseguramos que la carpeta data/ exista
-            os.makedirs(DATA_DIR, exist_ok=True)
+            if validation_errors:
+                for error in validation_errors:
+                    st.error(f"⚠️ {error}")
             
-            # 2. Filtramos y guardamos solo los archivos nuevos
-            for f in uploaded_files:
-                file_route = os.path.join(DATA_DIR, f.name)
+            if not valid_files:
+                st.warning("No hay archivos válidos para procesar.")
+            else:
+                new_files = []
+                old_files = []
                 
-                # Comprobamos si el archivo ya existe físicamente en la carpeta
-                if os.path.exists(file_route):
-                    old_files.append(f.name)
-                else:
-                    # Si no existe, lo guardamos en el disco
-                    with open(file_route, "wb") as f_uploaded:
-                        f_uploaded.write(f.getbuffer())
-                    new_files.append(f)
-            
-            # 3. Damos feedback inmediato sobre los repetidos
-            if old_files:
-                old_names = ", ".join(old_files)
-                st.warning(f"⚠️ Documentos ignorados (ya existían): {old_names}")
-            
-            # 4. Solo ejecutamos la ingesta pesada si hay archivos nuevos
-            if new_files:
-                with st.spinner("Procesando nuevos documentos..."):
-                    for f in new_files:
-                        with open(os.path.join(DATA_DIR, f.name), "wb") as buffer:
-                            buffer.write(f.getbuffer())
+                # 1. Aseguramos que la carpeta data/ exista
+                os.makedirs(DATA_DIR, exist_ok=True)
+                
+                # 2. Filtramos y guardamos solo los archivos nuevos
+                for f in valid_files:
+                    file_route = os.path.join(DATA_DIR, f.name)
                     
-                    # Simplemente lo llamas. El script detectará qué es nuevo.
-                    vector_db = setup_vector_db() 
-                    
-                    st.cache_resource.clear()
-                    st.success("¡Biblioteca actualizada!")
+                    # Comprobamos si el archivo ya existe físicamente en la carpeta
+                    if os.path.exists(file_route):
+                        old_files.append(f.name)
+                    else:
+                        # Si no existe, lo guardamos en el disco
+                        with open(file_route, "wb") as f_uploaded:
+                            f_uploaded.write(f.getbuffer())
+                        new_files.append(f)
+                
+                # 3. Damos feedback inmediato sobre los repetidos
+                if old_files:
+                    old_names = ", ".join(old_files)
+                    st.warning(f"⚠️ Documentos ignorados (ya existían): {old_names}")
+                
+                # 4. Solo ejecutamos la ingesta pesada si hay archivos nuevos
+                if new_files:
+                    with st.spinner("Procesando nuevos documentos..."):
+                        for f in new_files:
+                            with open(os.path.join(DATA_DIR, f.name), "wb") as buffer:
+                                buffer.write(f.getbuffer())
+                        
+                        # Simplemente lo llamas. El script detectará qué es nuevo.
+                        vector_db = setup_vector_db() 
+                        
+                        st.cache_resource.clear()
+                        st.success("¡Biblioteca actualizada!")
 
-                    # 3. EL TRUCO DE UX:
-                    # Cambiamos la llave para forzar que el uploader se vacíe
-                    st.session_state.uploader_key += 1
+                        # 3. EL TRUCO DE UX:
+                        # Cambiamos la llave para forzar que el uploader se vacíe
+                        st.session_state.uploader_key += 1
 
-                    # Refrescamos la interfaz para que el cambio sea inmediato
-                    st.rerun()
+                        # Refrescamos la interfaz para que el cambio sea inmediato
+                        st.rerun()
         else:
             st.warning("Selecciona archivos primero.")
 
@@ -177,7 +185,7 @@ with st.sidebar:
             try:
                 with st.spinner("Analizando temática de los PDFs..."):
                     tema = generar_titulo_tema(tuple(archivos_en_data))
-                    print(tema)
+                    logger.info(f"Tema detectado: {tema}")
                     st.session_state.tema_biblioteca = tema
                     
             except Exception:
@@ -295,30 +303,40 @@ if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
             else:
                 # --- CAPA 2: EJECUCIÓN DEL FLUJO ELEGIDO ---
                 if modo_respuesta == "👨‍🏫 Mentor Local (PDFs)":
-                    # --- CAPA 2: EJECUCIÓN DEL RAG ---
-                    with st.spinner("📚 Consultando tu biblioteca personal..."):
-                        respuesta = consultar_mentor(vector_db, prompt)
-                        
-                        # (Aquí va tu lógica de formateo de respuesta Pydantic de la Fase 1)
-                        if isinstance(respuesta, str):
-                            st.error(respuesta)
-                            full_response = respuesta
-                        else:
-                            full_response = f"### {respuesta.tema}\n\n"
-                            full_response += f"{respuesta.explicacion_tecnica}\n\n"
-                            
-                            if respuesta.codigo_ejemplo:
-                                full_response += f"**💻 Ejemplo de código:**\n```python\n{respuesta.codigo_ejemplo}\n```\n\n"
-                            
-                            full_response += "**📖 Referencias encontradas:**\n"
-                            for ref in respuesta.referencias:
-                                full_response += f"- *{ref.libro}* (Cap. {ref.capitulo}): {ref.concepto_clave}\n"
-                            
-                            full_response += f"\n\n> 💡 **Sugerencia:** {respuesta.sugerencia_estudio}"
-                            
-                            st.markdown(full_response)
-                        
-                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    if not vector_db:
+                        st.error("No hay biblioteca de documentos cargada.")
+                        st.session_state.messages.append({"role": "assistant", "content": "Error: No hay biblioteca cargada."})
+                    else:
+                        # --- CAPA 2: EJECUCIÓN DEL RAG ---
+                        with st.spinner("📚 Consultando tu biblioteca personal..."):
+                            try:
+                                respuesta = consultar_mentor(vector_db, prompt)
+                                
+                                # (Aquí va tu lógica de formateo de respuesta Pydantic de la Fase 1)
+                                full_response = f"### {respuesta.tema}\n\n"
+                                full_response += f"{respuesta.explicacion_tecnica}\n\n"
+                                
+                                if respuesta.codigo_ejemplo:
+                                    full_response += f"**💻 Ejemplo de código:**\n```python\n{respuesta.codigo_ejemplo}\n```\n\n"
+                                
+                                full_response += "**📖 Referencias encontradas:**\n"
+                                for ref in respuesta.referencias:
+                                    full_response += f"- *{ref.libro}* (Cap. {ref.capitulo}): {ref.concepto_clave}\n"
+                                
+                                full_response += f"\n\n> 💡 **Sugerencia:** {respuesta.sugerencia_estudio}"
+                                
+                                st.markdown(full_response)
+                                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                                
+                            except QuotaExceededError as e:
+                                st.error(f"⚠️ Cuota excedida: {e}")
+                                st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {e}"})
+                            except APIServiceUnavailableError as e:
+                                st.error(f"⚠️ Servicio no disponible: {e}")
+                                st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {e}"})
+                            except RAGQueryError as e:
+                                st.error(f"❌ Error en la consulta: {e}")
+                                st.session_state.messages.append({"role": "assistant", "content": f"❌ Error: {e}"})
 
                 elif modo_respuesta == "🕵️‍♂️ Investigador Web (Agente)":
                     with st.spinner("🕵️‍♂️ El Agente está investigando en la web..."):
