@@ -1,19 +1,22 @@
 import streamlit as st
 import os
 import shutil
+import time
+from typing import Optional, List
 from dotenv import load_dotenv
 
 from config import setup_logging
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.vectorstores import DocArrayInMemorySearch
 
 logger = setup_logging(__name__)
 
 # --- Importaciones de tu Arquitectura Limpia ---
-from config import DATA_DIR, MODELO_AGENTE 
+from config import DATA_DIR, MODELO_AGENTE, LLM_TEMP_TITULO, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW 
 from core.ingestion import setup_vector_db
 from core.rag_base import consultar_mentor
 from core.rag_base import RAGQueryError, QuotaExceededError, APIServiceUnavailableError
-from core.guardrails import validar_pregunta
+from core.guardrails import validar_pregunta, sanitize_query
 from core.agents import ejecutar_agente
 from tools.security import validate_uploaded_files
 
@@ -34,7 +37,7 @@ if not os.path.exists(DATA_DIR):
 
 # 2. GESTIÓN DE LA BASE DE DATOS (Caché y Persistencia)
 @st.cache_resource(show_spinner=False)
-def load_active_db():
+def load_active_db() -> Optional[DocArrayInMemorySearch]:
     """
     Carga la BD: 
     1. Del JSON si ya existe (Rápido)
@@ -58,8 +61,7 @@ def generar_titulo_tema(archivos: tuple) -> str:
         return "Conocimiento General"
     
     try:
-        # Usamos una temperatura baja (0.3) para que sea directo y conciso
-        llm = ChatGoogleGenerativeAI(model=MODELO_AGENTE, temperature=0.3)
+        llm = ChatGoogleGenerativeAI(model=MODELO_AGENTE, temperature=LLM_TEMP_TITULO)
         lista_nombres = ", ".join(archivos)
         
         prompt = (
@@ -98,6 +100,22 @@ vector_db = load_active_db()
 # Inicializamos la llave del uploader si no existe
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+
+# Rate limiting: inicializar historial de requests
+if "request_times" not in st.session_state:
+    st.session_state.request_times = []
+
+def check_rate_limit() -> bool:
+    """Verifica si el usuario puede hacer más requests. Retorna True si está permitido."""
+    now = time.time()
+    # Limpiar requests antiguos (fuera de la ventana de tiempo)
+    st.session_state.request_times = [
+        t for t in st.session_state.request_times if now - t < RATE_LIMIT_WINDOW
+    ]
+    if len(st.session_state.request_times) >= RATE_LIMIT_MAX:
+        return False
+    st.session_state.request_times.append(now)
+    return True
 
 # 3. BARRA LATERAL (Gestión de Conocimiento)
 with st.sidebar:
@@ -150,11 +168,8 @@ with st.sidebar:
                 # 4. Solo ejecutamos la ingesta pesada si hay archivos nuevos
                 if new_files:
                     with st.spinner("Procesando nuevos documentos..."):
-                        for f in new_files:
-                            with open(os.path.join(DATA_DIR, f.name), "wb") as buffer:
-                                buffer.write(f.getbuffer())
-                        
-                        # Simplemente lo llamas. El script detectará qué es nuevo.
+                        # Los archivos ya fueron guardados en el paso anterior
+                        # Solo ejecutamos la indexación
                         vector_db = setup_vector_db() 
                         
                         st.cache_resource.clear()
@@ -218,7 +233,7 @@ with st.sidebar:
             else:
                 st.info("No hay informacion de documentos cargados.")
 
-        except Exception as e:
+        except Exception:
             st.caption("Conectado a la base de conocimientos.")
     else:
         st.info("No hay documentos cargados.")
@@ -244,6 +259,8 @@ with st.sidebar:
             # 3. Limpiar caché de Streamlit y memoria de chat
             st.cache_resource.clear()
             st.session_state.messages = []
+            st.session_state.tema_biblioteca = ""
+            st.session_state.request_times = []
             
             st.success("Memoria borrada con éxito.")
             st.rerun()
@@ -273,6 +290,8 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
     if not vector_db:
         st.error("⚠️ Error: No hay información cargada para responder.")
+    elif not check_rate_limit():
+        st.error("⚠️ Has alcanzado el límite de solicitudes. Espera un momento antes de continuar.")
     else:
         # Mostramos el mensaje del usuario en la interfaz
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -280,18 +299,16 @@ if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
+            # --- CAPA 0: SANITIZACIÓN ---
+            prompt_limpio = sanitize_query(prompt)
+            
             # --- CAPA 1: GUARDRAIL DE SEGURIDAD ---
             with st.spinner("🛡️ Validando seguridad y relevancia..."):
-                # Obtenemos los temas directamente de la UI que ya generamos antes
-                # (Asegúrate de que la variable 'tema_generado' esté accesible, 
-                # o usa 'Biblioteca de documentos' como fallback)
-                temas_contexto = locals().get('tema_generado', 'Temas académicos de los documentos cargados')
-                
-                # Le pasamos los NOMBRES EXACTOS de los archivos, no solo el tema
+                # Obtenemos los temas directamente de los archivos cargados
                 archivos_actuales = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')] if os.path.exists(DATA_DIR) else []
                 temas_contexto = ", ".join(archivos_actuales) if archivos_actuales else "Documentos técnicos de IA"
 
-                validacion = validar_pregunta(prompt, temas_contexto)
+                validacion = validar_pregunta(prompt_limpio, temas_contexto)
             
             # --- DECISIÓN DEL GUARDRAIL ---
             if not validacion.es_seguro or not validacion.es_relevante:
@@ -310,11 +327,11 @@ if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
                         # --- CAPA 2: EJECUCIÓN DEL RAG ---
                         with st.spinner("📚 Consultando tu biblioteca personal..."):
                             try:
-                                respuesta = consultar_mentor(vector_db, prompt)
+                                respuesta = consultar_mentor(vector_db, prompt_limpio)
                                 
                                 # (Aquí va tu lógica de formateo de respuesta Pydantic de la Fase 1)
                                 full_response = f"### {respuesta.tema}\n\n"
-                                full_response += f"{respuesta.explicacion_tecnica}\n\n"
+                                full_response += f"{respuesta.explicacion_completa}\n\n"
                                 
                                 if respuesta.codigo_ejemplo:
                                     full_response += f"**💻 Ejemplo de código:**\n```python\n{respuesta.codigo_ejemplo}\n```\n\n"
@@ -342,7 +359,7 @@ if prompt := st.chat_input("Haz una pregunta sobre tus documentos..."):
                     with st.spinner("🕵️‍♂️ El Agente está investigando en la web..."):
                         
                         # Llamamos a la función encapsulada que nos devuelve un string limpio
-                        full_response = ejecutar_agente(prompt)
+                        full_response = ejecutar_agente(prompt_limpio)
                         
                         # Imprimimos en la interfaz
                         st.markdown(f"**🌐 Respuesta del Investigador:**\n\n{full_response}")

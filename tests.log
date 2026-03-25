@@ -10,9 +10,9 @@ tests/test_agents.py::test_agente_inicializacion PASSED                  [  5%]
 tests/test_ingestion.py::TestIngestion::test_setup_vector_db_no_data PASSED [ 11%]
 tests/test_ingestion.py::TestIngestion::test_json_loading_corrupted_file PASSED [ 16%]
 tests/test_ingestion.py::TestErrorHandling::test_pdf_load_failure_handled PASSED [ 22%]
-tests/test_rag.py::test_consultar_mentor_exitoso PASSED                  [ 27%]
+tests/test_rag.py::test_consultar_mentor_exitoso FAILED                  [ 27%]
 tests/test_rag.py::test_consultar_mentor_sin_api_key PASSED              [ 33%]
-tests/test_schemas.py::test_respuesta_mentor_valida PASSED               [ 38%]
+tests/test_schemas.py::test_respuesta_mentor_valida FAILED               [ 38%]
 tests/test_schemas.py::test_respuesta_mentor_invalida PASSED             [ 44%]
 tests/test_security.py::TestValidateFile::test_valid_pdf PASSED          [ 50%]
 tests/test_security.py::TestValidateFile::test_file_too_large PASSED     [ 55%]
@@ -25,10 +25,222 @@ tests/test_security.py::TestValidateUploadedFiles::test_multiple_valid_files PAS
 tests/test_security.py::TestValidateUploadedFiles::test_max_files_limit PASSED [ 94%]
 tests/test_security.py::TestValidateUploadedFiles::test_mixed_valid_invalid PASSED [100%]
 
+=================================== FAILURES ===================================
+________________________ test_consultar_mentor_exitoso _________________________
+
+vector_db = <MagicMock id='5543519456'>, pregunta = '¿Qué es un agente?'
+
+    def consultar_mentor(vector_db: DocArrayInMemorySearch, pregunta: str) -> RespuestaMentor:
+        """
+        Realiza la búsqueda semántica y genera la respuesta con la nueva API de Gemini.
+        Implementa cacheo básico para evitar llamadas repetidas a la API.
+        """
+        pregunta_normalizada = pregunta.strip().lower()
+    
+        if pregunta_normalizada in _query_cache:
+            return _query_cache[pregunta_normalizada]
+    
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RAGQueryError("GOOGLE_API_KEY no está configurada. Por favor, configura tu API key en el archivo .env")
+    
+        try:
+            # 1. Retrieval: Buscar en el índice DocArray
+            docs = vector_db.similarity_search(pregunta, k=RETRIEVAL_K)
+            contexto = "\n\n".join([doc.page_content for doc in docs])
+    
+            # 2. Inicializar el cliente de Gemini
+            client = genai.Client(api_key=api_key)
+    
+            #AI Engineering and Autonomous Agents
+            prompt = f"""
+            Answer the user's question based ONLY on the provided context.
+    
+            CONTEXT:
+            {contexto}
+    
+            QUESTION:
+            {pregunta}
+    
+            RULES:
+            1. Use ONLY info from context. Never invent, guess, or fabricate.
+            2. If context doesn't have the answer, say: "No encontré información sobre ese tema en los documentos cargados."
+            3. For recipes: include INGREDIENTS and FULL PREPARATION STEPS (all steps, not partial).
+            4. For references: only cite what exists in context. Never create fake chapter names like "Cap. X" - use "Documento" or the actual filename if available.
+            5. Keep code examples only if user explicitly asks for code.
+            """
+    
+            # 3. Generación usando Structured Outputs nativos de la nueva API
+            response = client.models.generate_content(
+                model=MODELO_AGENTE, # 'gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=RespuestaMentor, # Inyección directa del contrato
+                    temperature=LLM_TEMP_RAG,
+                ),
+            )
+    
+            # 4. Validación Final
+            if response.text is None:
+                raise ValueError("La respuesta del modelo no contiene texto.")
+    
+>           resultado = RespuestaMentor.model_validate_json(response.text)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           pydantic_core._pydantic_core.ValidationError: 1 validation error for RespuestaMentor
+E           explicacion_completa
+E             Field required [type=missing, input_value={'tema': 'Agentes', 'expl..._estudio': 'Sigue así'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.12/v/missing
+
+src/core/rag_base.py:68: ValidationError
+
+During handling of the above exception, another exception occurred:
+
+mocker = <pytest_mock.plugin.MockerFixture object at 0x14a709b50>
+
+    def test_consultar_mentor_exitoso(mocker):
+        # 1. Mock de la Base de Datos Vectorial
+        mock_vector_db = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.page_content = "Texto simulado del libro de Michael Lanham sobre Agentes."
+        mock_vector_db.similarity_search.return_value = [mock_doc]
+    
+        # 2. Mock del Cliente de Gemini
+        mock_client_class = mocker.patch('core.rag_base.genai.Client')
+        mock_client_instance = mock_client_class.return_value
+    
+        mock_response = MagicMock()
+        mock_response.text = """
+        {
+            "tema": "Agentes",
+            "explicacion_tecnica": "Explicación simulada",
+            "codigo_ejemplo": null,
+            "referencias": [{"libro": "Lanham", "capitulo": "1", "concepto_clave": "Test"}],
+            "sugerencia_estudio": "Sigue así"
+        }
+        """
+        mock_client_instance.models.generate_content.return_value = mock_response
+    
+        # 3. Ejecutamos la función
+>       resultado = consultar_mentor(mock_vector_db, "¿Qué es un agente?")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_rag.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+vector_db = <MagicMock id='5543519456'>, pregunta = '¿Qué es un agente?'
+
+    def consultar_mentor(vector_db: DocArrayInMemorySearch, pregunta: str) -> RespuestaMentor:
+        """
+        Realiza la búsqueda semántica y genera la respuesta con la nueva API de Gemini.
+        Implementa cacheo básico para evitar llamadas repetidas a la API.
+        """
+        pregunta_normalizada = pregunta.strip().lower()
+    
+        if pregunta_normalizada in _query_cache:
+            return _query_cache[pregunta_normalizada]
+    
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RAGQueryError("GOOGLE_API_KEY no está configurada. Por favor, configura tu API key en el archivo .env")
+    
+        try:
+            # 1. Retrieval: Buscar en el índice DocArray
+            docs = vector_db.similarity_search(pregunta, k=RETRIEVAL_K)
+            contexto = "\n\n".join([doc.page_content for doc in docs])
+    
+            # 2. Inicializar el cliente de Gemini
+            client = genai.Client(api_key=api_key)
+    
+            #AI Engineering and Autonomous Agents
+            prompt = f"""
+            Answer the user's question based ONLY on the provided context.
+    
+            CONTEXT:
+            {contexto}
+    
+            QUESTION:
+            {pregunta}
+    
+            RULES:
+            1. Use ONLY info from context. Never invent, guess, or fabricate.
+            2. If context doesn't have the answer, say: "No encontré información sobre ese tema en los documentos cargados."
+            3. For recipes: include INGREDIENTS and FULL PREPARATION STEPS (all steps, not partial).
+            4. For references: only cite what exists in context. Never create fake chapter names like "Cap. X" - use "Documento" or the actual filename if available.
+            5. Keep code examples only if user explicitly asks for code.
+            """
+    
+            # 3. Generación usando Structured Outputs nativos de la nueva API
+            response = client.models.generate_content(
+                model=MODELO_AGENTE, # 'gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=RespuestaMentor, # Inyección directa del contrato
+                    temperature=LLM_TEMP_RAG,
+                ),
+            )
+    
+            # 4. Validación Final
+            if response.text is None:
+                raise ValueError("La respuesta del modelo no contiene texto.")
+    
+            resultado = RespuestaMentor.model_validate_json(response.text)
+    
+            # Agregar al cache con límite de tamaño
+            if len(_query_cache) >= MAX_QUERY_CACHE_SIZE:
+                _query_cache.pop(next(iter(_query_cache)))
+            _query_cache[pregunta_normalizada] = resultado
+    
+            return resultado
+    
+        except Exception as e:
+            if ("EXCEEDED_QUOTA" in str(e)) or ("RESOURCE_EXHAUSTED" in str(e)):
+                raise QuotaExceededError("Se ha excedido la cuota de la API. Por favor, revisa tu uso y límites.")
+            elif "UNAVAILABLE" in str(e):
+                raise APIServiceUnavailableError("El servicio de la API no está disponible en este momento. Por favor, intenta nuevamente más tarde.")
+    
+>           raise RAGQueryError(f"Error en la consulta (RAG): {str(e)}")
+E           core.exceptions.RAGQueryError: Error en la consulta (RAG): 1 validation error for RespuestaMentor
+E           explicacion_completa
+E             Field required [type=missing, input_value={'tema': 'Agentes', 'expl..._estudio': 'Sigue así'}, input_type=dict]
+E               For further information visit https://errors.pydantic.dev/2.12/v/missing
+
+src/core/rag_base.py:83: RAGQueryError
+_________________________ test_respuesta_mentor_valida _________________________
+
+    def test_respuesta_mentor_valida():
+        # Simulamos un JSON perfecto que devolvería Gemini
+        datos_simulados = {
+            "tema": "Patrón ReAct",
+            "explicacion_tecnica": "Es un patrón que combina razonamiento y actuación.",
+            "codigo_ejemplo": "def react_agent(): pass",
+            "referencias": [
+                {
+                    "libro": "AI Engineering de Chip Huyen",
+                    "capitulo": "Capítulo 4",
+                    "concepto_clave": "Agentes y Herramientas"
+                }
+            ],
+            "sugerencia_estudio": "Revisar el capítulo 4."
+        }
+    
+        # Si Pydantic falla, esta línea lanzará un error y el test fallará
+>       respuesta = RespuestaMentor(**datos_simulados)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for RespuestaMentor
+E       explicacion_completa
+E         Field required [type=missing, input_value={'tema': 'Patrón ReAct',...evisar el capítulo 4.'}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.12/v/missing
+
+tests/test_schemas.py:21: ValidationError
 =============================== warnings summary ===============================
 tests/test_agents.py::test_agente_inicializacion
-  /Users/apple/Documents/Beetho - Estudios/Codigo Facilito/Bootcamp Especialización AI Engineer/AI-Mentor-Hub/src/core/agents.py:25: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.
+  /Users/apple/Documents/Beetho - Estudios/Codigo Facilito/Bootcamp Especialización AI Engineer/AI-Mentor-Hub/src/core/agents.py:26: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.
     agente = create_react_agent(llm, tools=herramientas)
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 18 passed, 1 warning in 10.70s ========================
+=========================== short test summary info ============================
+FAILED tests/test_rag.py::test_consultar_mentor_exitoso - core.exceptions.RAG...
+FAILED tests/test_schemas.py::test_respuesta_mentor_valida - pydantic_core._p...
+=================== 2 failed, 16 passed, 1 warning in 11.07s ===================

@@ -1,23 +1,29 @@
 import os
 import json
+from functools import lru_cache
+from typing import List, Optional, Set
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import DocArrayInMemorySearch
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from config import setup_logging
+from config import setup_logging, EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP, VECTOR_DB_PATH, DATA_DIR
 
 logger = setup_logging(__name__)
 
-def setup_vector_db():
-    persist_file = "data/processed_docs.json"
-    
-    logger.info("Cargando modelo de Embeddings local (HuggingFace)...")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+@lru_cache(maxsize=1)
+def get_embeddings_model() -> HuggingFaceEmbeddings:
+    logger.info(f"Cargando modelo de embeddings '{EMBEDDING_MODEL}' (cached)...")
+    return HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
-    existing_chunks = []
-    processed_files = set()
+def setup_vector_db() -> Optional[DocArrayInMemorySearch]:
+    persist_file = VECTOR_DB_PATH
+    
+    embeddings = get_embeddings_model()
+
+    existing_chunks: List[Document] = []
+    processed_files: Set[str] = set()
 
     # 1. Cargar la memoria existente y registrar qué archivos ya conocemos
     if os.path.exists(persist_file):
@@ -41,10 +47,10 @@ def setup_vector_db():
             existing_chunks = []
                     
     # 2. Revisar la carpeta física
-    if not os.path.exists("data"): 
-        os.makedirs("data")
+    if not os.path.exists(DATA_DIR): 
+        os.makedirs(DATA_DIR)
     
-    todos_los_pdfs = [f for f in os.listdir("data") if f.endswith(".pdf")]
+    todos_los_pdfs = [f for f in os.listdir(DATA_DIR) if f.endswith(".pdf")]
     
     # 3. La Magia Incremental: Filtrar SOLO los nuevos
     nuevos_pdfs = [f for f in todos_los_pdfs if f not in processed_files]
@@ -62,7 +68,7 @@ def setup_vector_db():
     logger.info(f"Indexando {len(nuevos_pdfs)} archivo(s) NUEVO(S)...")
     nuevos_documentos = []
     for archivo in nuevos_pdfs:
-        ruta = os.path.join("data", archivo)
+        ruta = os.path.join(DATA_DIR, archivo)
         logger.info(f"Leyendo nuevo: {archivo}")
         try:
             loader = PyPDFLoader(ruta)
@@ -72,7 +78,7 @@ def setup_vector_db():
             continue
 
     logger.info("Fragmentando texto nuevo...")
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     nuevos_chunks = text_splitter.split_documents(nuevos_documentos)
 
     # 5. Unir la memoria vieja con la memoria nueva
@@ -84,7 +90,7 @@ def setup_vector_db():
     # 6. Sobrescribir el JSON con la información completa
     docs_to_save = [{"page_content": d.page_content, "metadata": d.metadata} for d in todos_los_chunks]
     with open(persist_file, "w", encoding="utf-8") as f:
-        json.dump(docs_to_save, f, ensure_ascii=False, indent=2)
+        json.dump(docs_to_save, f, ensure_ascii=False)
 
     logger.info(f"Base de datos actualizada y persistida en {persist_file}")
     return vector_db

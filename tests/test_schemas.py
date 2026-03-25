@@ -5,7 +5,7 @@ def test_respuesta_mentor_valida():
     # Simulamos un JSON perfecto que devolvería Gemini
     datos_simulados = {
         "tema": "Patrón ReAct",
-        "explicacion_tecnica": "Es un patrón que combina razonamiento y actuación.",
+        "explicacion_completa": "Es un patrón que combina razonamiento y actuación.",
         "codigo_ejemplo": "def react_agent(): pass",
         "referencias": [
             {
@@ -28,7 +28,7 @@ def test_respuesta_mentor_invalida():
     # Simulamos una respuesta a la que le falta un campo obligatorio (ej. sugerencia_estudio)
     datos_malos = {
         "tema": "Embeddings",
-        "explicacion_tecnica": "Son vectores de números.",
+        "explicacion_completa": "Son vectores de números.",
         "codigo_ejemplo": None,
         "referencias": []
     }

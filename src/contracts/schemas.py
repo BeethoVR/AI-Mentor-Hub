@@ -17,7 +17,7 @@ class Referencia(BaseModel):
 
 class RespuestaMentor(BaseModel):
     tema: str = Field(description="El tema principal de la consulta.")
-    explicacion_tecnica: str = Field(description="Explicación detallada y técnica del concepto, basada SOLO en el contexto proporcionado.")
+    explicacion_completa: str = Field(description="Explicación detallada y completa del tema, basada SOLO en el contexto proporcionado. Incluye toda la información relevante (pasos, ingredientes, etc.).")
     codigo_ejemplo: Optional[str] = Field(description="Un bloque de código en Python demostrando el concepto. Null si no aplica.")
     referencias: List[Referencia] = Field(description="Lista de las fuentes utilizadas para esta respuesta.")
     sugerencia_estudio: str = Field(description="Una sugerencia breve sobre qué concepto relacionado debería estudiar el usuario a continuación.")

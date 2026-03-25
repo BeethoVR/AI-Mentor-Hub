@@ -22,7 +22,7 @@ def test_consultar_mentor_exitoso(mocker):
     mock_response.text = """
     {
         "tema": "Agentes",
-        "explicacion_tecnica": "Explicación simulada",
+        "explicacion_completa": "Explicación simulada",
         "codigo_ejemplo": null,
         "referencias": [{"libro": "Lanham", "capitulo": "1", "concepto_clave": "Test"}],
         "sugerencia_estudio": "Sigue así"
