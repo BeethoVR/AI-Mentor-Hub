@@ -52,7 +52,7 @@ src/analisis_mentor_hub.txt
 tests/main_muestra.py
 
 # =========================
-# Claude Code (IDE local)
+# Claude Code (IDE local) and others
 # =========================
 .claude/
 CLAUDE.md
@@ -63,9 +63,6 @@ TODO.md
 opencode.json
 requirements_pip.txt
 
-src/chromadb_*.py
-src/google_ingestion_rompe_limite_free.py
-src/ingestion_01.py
 src/other/
 data_utel/
 data_ai/
