@@ -8,17 +8,19 @@ El sistema combina un **Sistema RAG (Retrieval-Augmented Generation) Local** opt
 
 El proyecto implementa un patrón de "Modo de Operación" en la interfaz de usuario, permitiendo alternar entre dos cerebros analíticos:
 
-### 1. 👨‍🏫 Mentor Local (Motor RAG)
+### 1. 👨‍🏫 Mentor Local (Motor RAG PRO)
 
-El primer modo utiliza tu propia biblioteca de documentos PDF como base de conocimiento:
+El primer modo utiliza tu propia biblioteca de documentos PDF como base de conocimiento, ahora con capacidades avanzadas de razonamiento:
 
-- **Embeddings Locales (Zero-Cost):** Vectorización de documentos ejecutada 100% en CPU local utilizando el modelo `all-MiniLM-L6-v2` de HuggingFace, evitando límites de cuota y costos de APIs externas. **Con cacheo** para no recargar el modelo en cada consulta.
-- **Cacheo de Consultas:** Las preguntas repetidas se responden instantáneamente desde memoria, ahorrando cuota de API.
-- **Persistencia Nativa Ligera:** Almacenamiento del índice vectorial con `DocArrayInMemorySearch` en formato JSON (compactado), garantizando compatibilidad y evitando errores de serialización (`pickle`).
-- **Procesamiento Incremental Inteligente:** El sistema detecta automáticamente qué archivos PDF son nuevos y solo re-indexa los documentos que no existen en la base de conocimientos existente, optimizando el tiempo de carga.
-- **Validación de Seguridad (Guardrails):** Capa de seguridad que analiza cada pregunta del usuario antes de ejecutarla. Verifica que la consulta esté relacionada con los temas presentes en los documentos PDF cargados (cualquier tema es válido — cocina, historia, medicina, etc.), detectando prompt injections y consultas sin relación. Solo rechaza si la pregunta no tiene nada que ver con el contenido cargado.
-- **Respuestas Estructuradas con Schema:** Utiliza `Structured Outputs` nativos de Gemini para garantizar que las respuestas sigan un contrato Pydantic definido (`RespuestaMentor`), incluyendo tema, explicación técnica, código de ejemplo, referencias bibliográficas y sugerencias de estudio.
-- **Gestión de Archivos Validada:** Validación completa de archivos subidos: verificación de tipo PDF, límite de tamaño (36MB por archivo), límite de cantidad (5 archivos por carga), sanitización de nombres para prevenir path traversal, y validación del header del archivo.
+- **Detección Automática de Idioma:** El sistema identifica si tus documentos están en español o inglés durante la ingesta, optimizando las búsquedas posteriores.
+- **Memoria Conversacional (Query Rewriting):** El mentor no tiene "amnesia". Gracias a LangGraph, entiende seguimientos como "¿y cómo se hace?" basándose en el historial previo.
+- **Rerank Estructural Determinista:** Optimizado para CPUs locales. Reordena los fragmentos recuperados por página y documento, asegurando que las recetas o procesos técnicos no se corten ni se desordenen.
+- **Embeddings Locales (Zero-Cost):** Vectorización ejecutada 100% en CPU local (`all-MiniLM-L6-v2`).
+- **Cacheo de Consultas:** Las preguntas repetidas se responden instantáneamente desde memoria.
+- **Persistencia Nativa Ligera:** Almacenamiento vectorial en JSON (`DocArrayInMemorySearch`), compatible y sin errores de serialización (`pickle`).
+- **Procesamiento Incremental Inteligente:** Solo re-indexa PDFs nuevos, optimizando el tiempo de carga.
+- **Validación de Seguridad (Guardrails):** Capa de seguridad que analiza cada pregunta del usuario antes de ejecutarla para prevenir prompt injections y temas fuera de contexto.
+- **Respuestas Estructuradas con Schema:** Utiliza `Structured Outputs` nativos de Gemini (Pydantic) para garantizar que las respuestas incluyan explicación, código, referencias y sugerencias.
 
 ### 2. 🕵️‍♂️ Investigador Web (Agente ReAct)
 
@@ -60,16 +62,26 @@ AI-Mentor-Hub/
 └── .env                       # Variables de entorno (NO subir al repositorio)
 ```
 
+## 🏗️ Arquitectura PRO Avanzada
+
+Para superar las limitaciones del RAG tradicional en hardware local, el sistema implementa tres patrones de ingeniería de alto nivel:
+
+1. **Query Rewriting (Reescritura de Consulta):** Si el usuario hace una pregunta ambigua ("dame más detalles"), el **Planner** utiliza el historial para generar una búsqueda específica (ej: "detalles técnicos sobre backpropagation").
+2. **Búsqueda Bilingüe Adaptativa:** Si el RAG detecta que los documentos están en inglés pero el usuario pregunta en español, el sistema traduce automáticamente la *query* de búsqueda al inglés para maximizar la precisión semántica, pero responde siempre en español.
+3. **Deterministic Context Assembly:** En lugar de usar modelos pesados de Rerank, el sistema recupera un set ampliado de fragmentos y los ensambla siguiendo el orden lógico del documento original (Páginas/Secciones), manteniendo la coherencia de la información.
+
 ## 🛠️ Stack Tecnológico
 
 - **Lenguaje:** Python 3.12+
-- **Gestor de Paquetes:** `uv` (por su extrema velocidad y resolución estricta).
-- **Modelo Fundacional:** Google Gemini (`gemini-3.1-flash-lite-preview`) — seleccionado por sus cuotas más generosas para pruebas y desarrollo.
+- **Gestor de Paquetes:** `uv`.
+- **Modelo Fundacional:** Google Gemini (`gemini-3.1-flash-lite-preview`).
 - **Frameworks de IA:** LangChain y LangGraph.
+- **Data Validation & Type-Safety:** Pydantic (Structured Outputs).
+- **Detección de Idioma:** `langdetect`.
 - **Vector Store & Embeddings:** DocArray y HuggingFace (`all-MiniLM-L6-v2`).
-- **Validación de Datos:** Pydantic con validación de schema para structured outputs.
+- **Persistencia de Memoria:** SQLite (via LangGraph Checkpointer).
 - **Frontend:** Streamlit.
-- **Testing:** Pytest con técnicas de _Mocking_.
+- **Testing:** Pytest con técnicas de *Mocking* (Zero-cost tests).
 
 ## ⚙️ Instalación y Configuración
 
@@ -106,11 +118,12 @@ AI-Mentor-Hub/
 
 5. **Carga tus documentos de estudio:**
    La carpeta `data/` es donde se almacenan los archivos PDF que conformarán tu base de conocimiento. Por defecto, la carpeta está vacía — eres tú quien decide qué temática estudiar:
+
    - Sube tus propios PDFs (libros, artículos, apuntes, documentación) a traves de la interfase
    - El sistema automáticamente vectoriza el contenido y lo hace consultable
    - Puedes cargar hasta 5 archivos a la vez (límite de 36MB por archivo)
-   
-   *No hay temática predefinida: el Mentor se adapta a lo que tú quieras aprender.*
+
+   _No hay temática predefinida: el Mentor se adapta a lo que tú quieras aprender._
 
 ## 🖥️ Ejecución
 
@@ -129,6 +142,7 @@ uv run pytest tests/ -v
 ```
 
 ### Tests disponibles:
+
 - `test_rag.py` — Pruebas para el módulo RAG y manejo de errores
 - `test_schemas.py` — Validación de schemas Pydantic
 - `test_ingestion.py` — Pruebas del módulo de ingestion
@@ -139,9 +153,10 @@ uv run pytest tests/ -v
 
 ### Arquitectura del Agente ReAct
 
-El sistema implementa un ciclo ReAct moderno utilizando el _Tool Calling_ nativo a través del motor cíclico de LangGraph. A diferencia del patrón clásico de 2022 (Thought/Action/Observation en texto), el modelo razona a nivel de API sobre el estado actual, decide qué herramienta invocar (Action), y LangGraph le inyecta el resultado (Observation) para generar la respuesta final.
+El sistema implementa un ciclo ReAct moderno utilizando el _Tool Calling_ nativo a través del motor cíclico de LangGraph con persistencia en SQLite (`agent_memory.db`). A diferencia del patrón clásico de 2022 (Thought/Action/Observation en texto), el modelo razona a nivel de API sobre el estado actual, decide qué herramienta invocar (Action), y LangGraph le inyecta el resultado (Observation) para generar la respuesta final.
 
 El agente dispone de **3 herramientas** para realizar búsquedas complementarias:
+
 1. **🔍 Búsqueda Web (DuckDuckGo):** Para información actualizada, noticias recientes y datos en tiempo real
 2. **📚 Wikipedia:** Para definiciones formales, teóricas e históricas de conceptos
 3. **📄 ArXiv:** Para papers académicos e investigaciones científicas avanzadas
@@ -153,6 +168,7 @@ El sistema utiliza un único modelo para todas las operaciones: **gemini-3.1-fla
 ### Mejoras en el Prompt
 
 El prompt del RAG ha sido optimizado para:
+
 - **No inventar información:** Si el contexto no tiene la respuesta, lo indica claramente
 - **Recetas completas:** Incluye ingredientes Y pasos de preparación completos
 - **Referencias precisas:** Solo cita lo que existe en el contexto, nunca crea capítulos falsos
@@ -161,6 +177,7 @@ El prompt del RAG ha sido optimizado para:
 ### Manejo de Errores
 
 El proyecto implementa un sistema robusto de excepciones personalizadas:
+
 - `RAGQueryError`: Errores generales en consultas RAG
 - `QuotaExceededError`: Cuota de API excedida
 - `APIServiceUnavailableError`: Servicio no disponible
@@ -172,6 +189,7 @@ Todas las operaciones críticas incluyen logging estructurado configurable vía 
 ### Type Hints
 
 El código utiliza type hints completos en los módulos principales para mejorar la mantenibilidad y detección de errores temprana:
+
 - `ingestion.py`: Funciones con tipos de retorno explícitos
 - `rag_base.py`: Type hints para cache y parámetros
 - `app.py`: Type hints para funciones de carga de datos
@@ -191,59 +209,59 @@ El archivo `config.py` centraliza todos los parámetros configurables:
 
 ### Rutas
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `DATA_DIR` | Directorio de datos | `data/` |
+| Variable         | Descripción                     | Valor por defecto          |
+| ---------------- | ------------------------------- | -------------------------- |
+| `DATA_DIR`       | Directorio de datos             | `data/`                    |
 | `VECTOR_DB_PATH` | Ruta del archivo JSON vectorial | `data/processed_docs.json` |
 
 ### Modelo de IA
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `MODELO_AGENTE` | Modelo único (RAG + Agente) | `gemini-3.1-flash-lite-preview` |
-| `EMBEDDING_MODEL` | Modelo de embeddings | `all-MiniLM-L6-v2` |
+| Variable          | Descripción                 | Valor por defecto               |
+| ----------------- | --------------------------- | ------------------------------- |
+| `MODELO_AGENTE`   | Modelo único (RAG + Agente) | `gemini-3.1-flash-lite-preview` |
+| `EMBEDDING_MODEL` | Modelo de embeddings        | `all-MiniLM-L6-v2`              |
 
 ### Chunking y Retrieval
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `CHUNK_SIZE` | Tamaño de chunk | `1000` |
-| `CHUNK_OVERLAP` | Superposición entre chunks | `150` |
-| `RETRIEVAL_K` | Número de documentos a recuperar | `4` |
+| Variable        | Descripción                      | Valor por defecto |
+| --------------- | -------------------------------- | ----------------- |
+| `CHUNK_SIZE`    | Tamaño de chunk                  | `1500`            |
+| `CHUNK_OVERLAP` | Superposición entre chunks       | `200`             |
+| `RETRIEVAL_K`   | Número de documentos a recuperar | `6`               |
 
 ### Temperaturas por tarea
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `LLM_TEMP_RAG` | Para respuestas del Mentor | `0.2` |
-| `LLM_TEMP_GUARDRAILS` | Para validación de preguntas | `0.3` |
-| `LLM_TEMP_AGENTE` | Para el agente investigador | `0.2` |
-| `LLM_TEMP_TITULO` | Para generar títulos dinámicos | `0.3` |
+| Variable              | Descripción                    | Valor por defecto |
+| --------------------- | ------------------------------ | ----------------- |
+| `LLM_TEMP_RAG`        | Para respuestas del Mentor     | `0.2`             |
+| `LLM_TEMP_GUARDRAILS` | Para validación de preguntas   | `0.3`             |
+| `LLM_TEMP_AGENTE`     | Para el agente investigador    | `0.2`             |
+| `LLM_TEMP_TITULO`     | Para generar títulos dinámicos | `0.3`             |
 
 ### Rate Limiting
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `RATE_LIMIT_MAX` | Máximo requests por ventana | `15` |
-| `RATE_LIMIT_WINDOW` | Ventana de tiempo (segundos) | `60` |
+| Variable            | Descripción                  | Valor por defecto |
+| ------------------- | ---------------------------- | ----------------- |
+| `RATE_LIMIT_MAX`    | Máximo requests por ventana  | `15`              |
+| `RATE_LIMIT_WINDOW` | Ventana de tiempo (segundos) | `60`              |
 
 ### Sanitización
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `MAX_QUERY_LENGTH` | Longitud máxima de consulta | `2000` |
+| Variable           | Descripción                 | Valor por defecto |
+| ------------------ | --------------------------- | ----------------- |
+| `MAX_QUERY_LENGTH` | Longitud máxima de consulta | `2000`            |
 
 ### Cache
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `MAX_QUERY_CACHE_SIZE` | Máximo preguntas cacheadas | `100` |
+| Variable               | Descripción                | Valor por defecto |
+| ---------------------- | -------------------------- | ----------------- |
+| `MAX_QUERY_CACHE_SIZE` | Máximo preguntas cacheadas | `100`             |
 
 ### Logging
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `LOG_LEVEL` | Nivel de logging | `INFO` |
+| Variable    | Descripción      | Valor por defecto |
+| ----------- | ---------------- | ----------------- |
+| `LOG_LEVEL` | Nivel de logging | `INFO`            |
 
 ## ⚠️ Limitaciones Conocidas
 
@@ -253,16 +271,16 @@ El archivo `config.py` centraliza todos los parámetros configurables:
 
 ## ❓ Solución de Problemas
 
-| Error | Solución |
-|-------|----------|
-| `GOOGLE_API_KEY not found` | Crear archivo `.env` con `GOOGLE_API_KEY=tu_clave` |
-| `No hay información cargada` | Subir PDFs en la barra lateral y hacer clic en "Procesar y Aprender" |
-| `Cuota excedida` | Esperar o revisar los límites de tu cuenta de Google AI Studio |
-| `JSON corrupto` | Eliminar el archivo `data/processed_docs.json` y volver a cargar los PDFs |
-| `Import error` | Ejecutar `uv sync` para instalar las dependencias |
-| `Streamlit not found` | Ejecutar `uv pip install streamlit` |
-| `No puedo hacer preguntas` | Verificar que los PDFs estén cargados y procesados |
-| `Respuestas incorrectas` | Verificar que los PDFs contengan información sobre el tema consultado |
+| Error                        | Solución                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `GOOGLE_API_KEY not found`   | Crear archivo `.env` con `GOOGLE_API_KEY=tu_clave`                        |
+| `No hay información cargada` | Subir PDFs en la barra lateral y hacer clic en "Procesar y Aprender"      |
+| `Cuota excedida`             | Esperar o revisar los límites de tu cuenta de Google AI Studio            |
+| `JSON corrupto`              | Eliminar el archivo `data/processed_docs.json` y volver a cargar los PDFs |
+| `Import error`               | Ejecutar `uv sync` para instalar las dependencias                         |
+| `Streamlit not found`        | Ejecutar `uv pip install streamlit`                                       |
+| `No puedo hacer preguntas`   | Verificar que los PDFs estén cargados y procesados                        |
+| `Respuestas incorrectas`     | Verificar que los PDFs contengan información sobre el tema consultado     |
 
 ### Tips
 
@@ -311,14 +329,14 @@ El proyecto incluye varias optimizaciones para mejorar el rendimiento y proteger
 
 El proyecto cuenta con tests unitarios que cubren las funcionalidades principales:
 
-| Test | Cobertura |
-|------|-----------|
-| `test_rag.py` | Consultas RAG, manejo de errores, cacheo |
-| `test_schemas.py` | Validación de schemas Pydantic |
+| Test                | Cobertura                                |
+| ------------------- | ---------------------------------------- |
+| `test_rag.py`       | Consultas RAG, manejo de errores, cacheo |
+| `test_schemas.py`   | Validación de schemas Pydantic           |
 | `test_ingestion.py` | Carga de PDFs, procesamiento incremental |
-| `test_agents.py` | Agente investigador ReAct |
-| `test_security.py` | Validación de archivos subidos |
+| `test_agents.py`    | Agente investigador ReAct                |
+| `test_security.py`  | Validación de archivos subidos           |
 
 ---
 
-*Documentación actualizada: 2026-03-25*
+_Documentación actualizada: 2026-03-25_

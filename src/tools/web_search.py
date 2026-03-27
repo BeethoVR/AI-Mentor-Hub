@@ -44,7 +44,7 @@ def buscar_en_internet(query: str) -> str:
 
 # Envolvemos nuestra función en una Herramienta oficial de LangChain
 herramienta_web = Tool(
-                            name="Busqueda_Internet",
-                            func=buscar_en_internet,
-                            description="Útil SOLO cuando necesitas información actualizada de internet, noticias recientes, o datos en tiempo real (como el clima). Entrada: una consulta de búsqueda clara."
-                        )
+    name="Busqueda_Internet",
+    func=buscar_en_internet,
+    description="Useful ONLY when you need updated information from the internet, recent news, or real-time data (like the weather). Input: a clear search query."
+)

@@ -33,7 +33,7 @@ def buscar_papers_arxiv(query: str) -> str:
         return f"Error al consultar ArXiv: {str(e)}"
 
 herramienta_arxiv = Tool(
-                            name="Buscar_Papers_ArXiv",
-                            func=buscar_papers_arxiv,
-                            description="Útil SOLO cuando necesitas buscar investigaciones científicas, papers académicos o literatura técnica avanzada sobre Machine Learning, estadística o IA. Entrada: términos de búsqueda en inglés (ej. 'neural networks')."
-                        )
+    name="Buscar_Papers_ArXiv",
+    func=buscar_papers_arxiv,
+    description="Useful ONLY when you need to search for scientific research, academic papers, or advanced technical literature about Machine Learning, statistics, or AI. Input: search terms in English (e.g., 'neural networks')."
+)

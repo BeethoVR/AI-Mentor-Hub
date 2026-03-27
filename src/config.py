@@ -14,11 +14,11 @@ MODELO_AGENTE = "gemini-3.1-flash-lite-preview"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # Parámetros de chunking
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
+CHUNK_SIZE = 2000
+CHUNK_OVERLAP = 500
 
 # Parámetros de retrieval
-RETRIEVAL_K = 4
+RETRIEVAL_K = 6
 
 # Temperaturas por tarea
 LLM_TEMP_RAG = 0.2           # Para respuestas del Mentor

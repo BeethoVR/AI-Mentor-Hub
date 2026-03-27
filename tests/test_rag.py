@@ -4,8 +4,9 @@ from unittest.mock import MagicMock, patch
 
 os.environ["GOOGLE_API_KEY"] = "test-api-key"
 
-from core.rag_base import consultar_mentor
+from core.rag_base import consultar_mentor, RAGQueryError
 from contracts.schemas import RespuestaMentor
+from config import RETRIEVAL_K
 
 def test_consultar_mentor_exitoso(mocker):
     # 1. Mock de la Base de Datos Vectorial
@@ -17,7 +18,7 @@ def test_consultar_mentor_exitoso(mocker):
     # 2. Mock del Cliente de Gemini
     mock_client_class = mocker.patch('core.rag_base.genai.Client')
     mock_client_instance = mock_client_class.return_value
-    
+
     mock_response = MagicMock()
     mock_response.text = """
     {
@@ -36,7 +37,8 @@ def test_consultar_mentor_exitoso(mocker):
     # 4. Validamos que el resultado sea un objeto Pydantic correcto
     assert isinstance(resultado, RespuestaMentor)
     assert resultado.tema == "Agentes"
-    mock_vector_db.similarity_search.assert_called_once_with("¿Qué es un agente?", k=4)
+    mock_vector_db.similarity_search.assert_called_once_with("¿Qué es un agente?", k=RETRIEVAL_K)
+
 
 
 def test_consultar_mentor_sin_api_key(mocker):

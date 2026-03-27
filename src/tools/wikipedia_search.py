@@ -40,7 +40,7 @@ def buscar_en_wikipedia(query: str) -> str:
 
 # Envolvemos la función en una Herramienta oficial de LangChain
 herramienta_wiki = Tool(
-                            name="Buscar_Concepto_Wikipedia",
-                            func=buscar_en_wikipedia,
-                            description="Útil SOLO cuando necesitas la definición formal, teórica o histórica de un concepto, algoritmo o término (ej. '¿Qué es Machine Learning?'). NO usar para noticias recientes."
-                        )
+    name="Buscar_Concepto_Wikipedia",
+    func=buscar_en_wikipedia,
+    description="Useful ONLY when you need the formal, theoretical, or historical definition of a concept, algorithm, or term (e.g., 'What is Machine Learning?'). DO NOT use for recent news."
+)
