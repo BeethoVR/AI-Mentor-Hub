@@ -1,184 +1,131 @@
+# 🛠️ Manual Técnico: Arquitectura y Decisiones de Ingeniería (ADR)
+
+AI-Mentor Hub es un sistema de asistencia de estudio de vanguardia diseñado bajo los principios de **Clean Architecture** y orquestación de **Agentes Autónomos**. Este manual detalla las tripas técnicas del sistema y el razonamiento detrás de cada decisión de diseño.
+
 ---
 
-### Manual Técnico de Arquitectura
-
-Este documento detalla el flujo de datos y las decisiones de ingeniería tomadas para la construcción del AI-Mentor Hub.
-
-```markdown
-# Manual Técnico y Decisiones de Arquitectura (ADR)
-
-Este documento describe la arquitectura técnica del AI-Mentor Hub, un sistema RAG especializado para estudiantes de AI Engineering.
-
-## 1. Arquitectura General
+## 1. Arquitectura de Sistemas y Flujo de Datos
 
 ### Stack Tecnológico
 
 - **Frontend:** Streamlit (interfaz interactiva)
 - **Embeddings:** HuggingFace (`all-MiniLM-L6-v2`) - CPU-only
-- **LLM:** Google Gemini 2.5 Flash (generación)
-- **Vector Store:** DocArrayInMemorySearch (en memoria con persistencia JSON)
+- **LLM:** Google Gemini 3.1 Preview (generación)
+- **Vector Store:** SQLite / DocArrayInMemorySearch (en memoria con persistencia JSON)
 - **Testing:** pytest
 
-### Estructura del Proyecto
-```
+### Vista de Alto Nivel
+El sistema se divide en tres capas fundamentales:
+1.  **Capa de Presentación (Streamlit):** Interfaz reactiva que gestiona la sesión, la carga de archivos y la visualización del chat.
+2.  **Capa de Orquestación (LangGraph):** Motor de estado cíclico que coordina agentes especializados.
+3.  **Capa de Conocimiento (RAG Engine PRO):** Pipeline de ingesta, vectorización y recuperación optimizada para hardware local.
 
+### Estructura de Directorios
+```text
 src/
-├── app.py # Interfaz Streamlit principal
-├── config.py # Configuración centralizada
+├── app.py                 # Punto de entrada y controlador de la UI
+├── config.py              # Variables globales y configuración de hardware
+├── state_manager.py       # Gestión de caché, rate-limits y títulos dinámicos
 ├── contracts/
-│ └── schemas.py # Esquemas Pydantic (ValidacionEntrada, RespuestaMentor)
+│   └── schemas.py         # Modelos Pydantic para Structured Outputs
 ├── core/
-│ ├── agents.py # Agente LangGraph con herramientas
-│ ├── exceptions.py # Excepciones customizadas
-│ ├── guardrails.py # Validación de entrada/salida
-│ ├── ingestion.py # Carga y procesamiento de PDFs
-│ └── rag_base.py # Motor RAG (consultas al mentor)
+│   ├── agents.py          # Grafo multiagente (Planner, Executor, Verifier)
+│   ├── ingestion.py       # Ingesta de PDFs y Embeddings locales
+│   ├── rag_base.py        # Motor RAG base (consultas directas)
+│   ├── guardrails.py      # Seguridad y validación de contexto
+│   ├── storage.py         # Manejo de persistencia de archivos PDF
+│   └── exceptions.py      # Jerarquía de errores personalizados
 └── tools/
-├── arxiv_search.py # Búsqueda en ArXiv
-├── security.py # Validación de archivos subidos
-├── web_search.py # Búsqueda web (DuckDuckGo)
-└── wikipedia_search.py # Búsqueda en Wikipedia
+    ├── security.py        # Validación estricta de archivos subidos
+    ├── web_search.py      # Integración con DuckDuckGo
+    ├── wikipedia_search.py # Integración con Wikipedia
+    └── arxiv_search.py     # Integración con ArXiv (papers científicos)
+```
 
-````
+---
 
-## 2. Flujo de Datos (Pipeline RAG PRO)
+## 2. Pipeline de Datos: El RAG PRO
 
-1.  **Ingesta (`src/core/ingestion.py`):**
-    - Carga documentos PDF desde `data/` usando `PyPDFLoader`.
-    - **Detección de Idioma:** Analiza los primeros fragmentos con `langdetect` y guarda el idioma predominante en `project_metadata.json`.
-    - Fragmentación con `RecursiveCharacterTextSplitter` (chunks de 2000 caracteres, overlap de 500).
-    - Vectorización local con `HuggingFaceEmbeddings`.
-    - Persistencia en `DocArrayInMemorySearch` (JSON).
+### 2.1. Fase de Ingesta Inteligente
+1.  **Carga:** Se utiliza `PyPDFLoader` para procesar documentos en la carpeta `data/`.
+2.  **Detección de Idioma:** Se analiza el primer bloque de texto con `langdetect`. El resultado se persiste en `project_metadata.json` para que el Agente sepa en qué idioma buscar.
+3.  **Fragmentación (Chunking):** 1500 caracteres con 200 de solapamiento. Se utiliza `RecursiveCharacterTextSplitter` para mantener la integridad de párrafos y oraciones.
+4.  **Vectorización:** Uso de `HuggingFaceEmbeddings` con el modelo `all-MiniLM-L6-v2`. Se ejecuta 100% en CPU.
+5.  **Persistencia:** Los vectores y metadatos se guardan en `data/processed_docs.json` usando `DocArrayInMemorySearch`.
 
-2.  **Orquestación y Reescritura (`src/core/agents.py`):**
-    - Al recibir una consulta, el **Planner** analiza el historial de mensajes y el idioma detectado.
-    - **Query Rewriting:** Si la consulta es un seguimiento (ej: "dame más pasos"), la reescribe para que sea específica y esté en el idioma de los documentos.
+### 2.2. Recuperación Avanzada (Retrieval)
+-   **Neighbor Expansion:** Para evitar respuestas incompletas, al encontrar un fragmento relevante, el sistema recupera automáticamente las páginas adyacentes (anterior y posterior).
+-   **Deterministic Rerank:** En lugar de re-rankers pesados de IA, se aplica un ordenamiento algorítmico por `source` y `page`, reconstruyendo la secuencia lógica original del autor.
 
-3.  **Recuperación y Ensamblado (Retrieval):**
-    - Busca `K * 1.5` fragmentos con mayor similitud de coseno.
-    - **Deterministic Rerank:** Ordena los fragmentos por origen y número de página para reconstruir la secuencia lógica del documento.
+---
 
-4.  **Generación y Traducción (`src/core/agents.py`):**
-    - El **Executor** genera la respuesta basándose únicamente en el contexto recuperado.
-    - **Traducción Automática:** Si el contexto está en inglés pero el usuario pregunta en español, el Executor traduce la respuesta final al español.
+## 3. Orquestación Multiagente (LangGraph)
 
-## 3. Registro de Decisiones Arquitectónicas (ADR)
+El sistema utiliza un **Grafo de Estado** con memoria persistente en **SQLite** (`agent_memory.db`).
 
-### ADR 001: Embeddings Locales vs API
-- **Contexto:** Las cuotas gratuitas de APIs en la nube limitan severamente el proceso de ingesta masiva (Rate Limiting de 15-100 RPM).
-- **Decisión:** Implementar `sentence-transformers` ejecutándose localmente.
-- **Consecuencia:** Ingesta ilimitada y sin costo, a cambio de una carga inicial en CPU.
+### Nodos del Grafo:
+-   **Planner:** Realiza *Query Rewriting*. Si la pregunta es vaga o depende del historial, la reescribe para que sea una búsqueda semántica completa.
+-   **Retriever:** Ejecuta la búsqueda en el Vector Store local o dispara el **Auto-Fallback** a la web si no encuentra nada.
+-   **Executor:** Redacta la respuesta final en español, traduciendo si el contexto está en inglés. Aplica reglas de extracción *verbatim* para manuales técnicos o recetas.
+-   **Verifier:** Compara la respuesta contra el contexto original. Si hay alucinaciones (hechos no presentes en el PDF), rechaza la respuesta y devuelve el flujo al Planner.
 
-### ADR 002: Control de Dependencias para CPU Antiguo
-- **Contexto:** Las versiones modernas de PyTorch y librerías científicas requieren instrucciones AVX2 no disponibles en Intel Core de 3ra generación.
-- **Decisión:** Anclar `numpy==1.26.4`, `transformers==4.44.2`, `torch==2.2.2`.
-- **Consecuencia:** Estabilidad total del sistema sin comprometer funcionalidades del RAG.
+---
 
-### ADR 003: Persistencia JSON vs Pickle
-- **Contexto:** Serializar objetos complejos de LangChain con `pickle` genera errores de "Attribute lookup" al recargar.
-- **Decisión:** Extraer `page_content` y `metadata` y guardarlos en JSON estándar.
-- **Consecuencia:** Cargas seguras, independientes de la versión de Python.
+## 4. Registro de Decisiones de Arquitectura (ADR)
 
-### ADR 004: Cacheo de Embeddings
-- **Contexto:** El modelo de embeddings se recargaba en cada consulta.
-- **Decisión:** Usar `@lru_cache` en `get_embeddings_model()`.
-- **Consecuencia:** Mejor rendimiento en consultas repetidas.
+Este registro documenta las decisiones críticas que definen la robustez del sistema.
 
-### ADR 005: Cacheo de Resultados RAG
-- **Contexto:** Consultas repetidas generaban llamadas innecesarias a la API.
-- **Decisión:** Dictionary-based cache con límite de 100 entradas.
-- **Consecuencia:** Reducción de costos API y latencia.
+| ID | Título | Decisión y Contexto |
+| :--- | :--- | :--- |
+| **ADR-001** | **Embeddings Locales** | Se usa `sentence-transformers` en CPU local para evitar costos y rate-limits de APIs de embeddings externas. |
+| **ADR-002** | **Pinning de Versiones** | Se anclan versiones específicas de `numpy`, `torch` y `transformers` para asegurar compatibilidad con CPUs antiguos (Intel Gen 3). |
+| **ADR-003** | **JSON sobre Pickle** | La persistencia vectorial se hace en JSON para evitar errores de serialización y vulnerabilidades de seguridad de `pickle`. |
+| **ADR-004** | **Caché de Modelos** | El modelo de embeddings se carga una sola vez usando `@lru_cache`, reduciendo la latencia de consulta en un 90%. |
+| **ADR-005** | **Caché de Consultas** | Las respuestas a preguntas idénticas se sirven desde un caché en memoria (límite 100) para ahorrar cuota de Gemini. |
+| **ADR-006** | **Rate Limiting** | Límite estricto de 15 RPM para proteger la cuota gratuita de Google AI Studio. |
+| **ADR-007** | **Sanitización de Queries** | Eliminación de HTML, URLs y caracteres especiales antes de procesar la consulta para prevenir ataques de inyección. |
+| **ADR-008** | **Query Rewriting** | Uso del historial de SQLite para resolver la "amnesia" conversacional y pronombres ambiguos. |
+| **ADR-009** | **Rerank Estructural** | Ordenamiento determinista por página y documento tras el retrieval para mantener la coherencia sin carga de GPU. |
+| **ADR-010** | **RAG Bilingüe** | Traducción dinámica en tiempo de consulta. Permite estudiar documentos en inglés preguntando en español. |
+| **ADR-011** | **Structured Outputs** | Uso de `with_structured_output` (Pydantic) para forzar al LLM a devolver JSON válido. Elimina el uso de Regex frágiles. |
+| **ADR-012** | **LangGraph Cíclico** | Paso de cadenas secuenciales a grafos para permitir bucles de retroalimentación (Refinamiento de respuestas). |
+| **ADR-013** | **Neighbor Expansion** | Recuperación de páginas `n-1` y `n+1` para garantizar integridad en recetas y procesos largos. |
+| **ADR-014** | **Checkpointing SQLite** | Almacenamiento del estado del agente en disco para persistencia de memoria entre reinicios del servidor. |
+| **ADR-015** | **UV como Package Manager** | Uso de `uv` por su velocidad extrema y manejo impecable de entornos virtuales aislados. |
 
-### ADR 006: Rate Limiting
-- **Contexto:** Sin control, usuarios pueden exceder cuotas API rápidamente.
-- **Decisión:** Implementar `15 requests per minute` usando `time.time()`.
-- **Consecuencia:** Protección contra abuso, cumplimiento de límites API.
+---
 
-### ADR 007: Sanitización de Consultas
-- **Contexto:** Usuarios pueden injectar HTML, URLs o emails en queries.
-- **Decisión:** Función `sanitize_query()` que remueve patrones peligroso.
-- **Consecuencia:** Seguridad mejorada contra prompt injection.
+## 5. Seguridad y Validación
 
-### ADR 008: Query Rewriting para Continuidad de Contexto
-- **Contexto:** En conversaciones multi-turno, los usuarios usan pronombres ("esto", "aquello") o frases incompletas ("dame más").
-- **Decisión:** El **Planner** reescribe la consulta usando el historial de mensajes de SQLite.
-- **Consecuencia:** Mejora drástica en la precisión del retrieval conversacional.
+### Validación de Archivos (`tools/security.py`)
+-   Verificación de firma mágica de PDF (Header `%PDF-`).
+-   Límite de 36MB por archivo y 5 archivos máximo por carga.
+-   Sanitización de nombres de archivo para prevenir Path Traversal.
 
-### ADR 009: Rerank Estructural Determinista (CPU-Optimized)
-- **Contexto:** Modelos de Rerank basados en IA (Cross-Encoders) son costosos para hardware local antiguo.
-- **Decisión:** Implementar un reordenamiento algorítmico por fuente y página tras el retrieval inicial.
-- **Consecuencia:** Se mantiene la coherencia lógica (ej: pasos de una receta) con costo computacional nulo.
+### Guardrails de Entrada (`core/guardrails.py`)
+Un sistema experto analiza la pregunta antes de que llegue al agente:
+-   **Filtro de Inyección:** Detecta prompts que intentan "saltarse" las reglas.
+-   **Filtro de Relevancia:** Valida si la pregunta tiene relación con el tema de la biblioteca, ahorrando tokens en consultas fuera de lugar.
 
-### ADR 010: RAG Adaptativo Bilingüe
-- **Contexto:** Los documentos de estudio a menudo están en inglés, pero el usuario prefiere preguntar y recibir respuestas en español.
-- **Decisión:** El sistema detecta el idioma del RAG e instruye al Planner para buscar en ese idioma y al Executor para traducir al español.
-- **Consecuencia:** Se aprovecha la riqueza semántica de la fuente original sin barreras lingüísticas para el usuario.
+---
 
-### ADR 011: Contratos Estrictos con Pydantic (Structured Outputs)
-- **Contexto:** Los LLMs tienden a alucinar formatos o devolver texto no estructurado, lo cual rompe la UI o la lógica de negocio posterior.
-- **Decisión:** Forzar al modelo Gemini a utilizar `with_structured_output` inyectando esquemas Pydantic (`ValidacionEntrada`, `RespuestaMentor`, `PlanAgente`).
-- **Consecuencia:** El sistema es 100% determinista en su estructura de datos. Se elimina la necesidad de usar expresiones regulares para extraer información de la respuesta del LLM, garantizando tipado seguro en toda la aplicación.
+## 6. Mantenimiento y Testing
 
-## 4. Excepciones Customizadas (`src/core/exceptions.py`)
+### Estrategia de Mocking
+Todas las pruebas unitarias (`tests/`) utilizan `unittest.mock` para simular las respuestas de la API de Gemini y de la base de datos. Esto permite un desarrollo **Zero-Cost** y **Offline-First** durante el ciclo de testing.
 
-```python
-class RAGQueryError(Exception): ...
-class QuotaExceededError(Exception): ...
-class APIServiceUnavailableError(Exception): ...
-class DocumentLoadError(Exception): ...
-class ValidationError(Exception): ...
-````
-
-## 5. Validación de Archivos (`src/tools/security.py`)
-
-- Validación de extensión (.pdf)
-- Validación de tamaño máximo (10MB)
-- Validación de header PDF
-- Protección contra path traversal
-- Protección contra archivos ocultos
-- Validación de múltiples archivos (máx 5)
-
-## 6. Configuración Centralizada (`src/config.py`)
-
-Parámetros configurables:
-
-- `CHUNK_SIZE`, `CHUNK_OVERLAP` (fragmentación)
-- `RETRIEVAL_K` (número de chunks recuperados)
-- `LLM_TEMP_RAG`, `LLM_TEMP_GUARDRAILS`, `LLM_TEMP_AGENTE`, `LLM_TEMP_TITULO`
-- `EMBEDDING_MODEL`
-- `VECTOR_DB_PATH`
-- `MAX_FILES_UPLOAD`, `MAX_FILE_SIZE`
-- `RATE_LIMIT_RPM`
-
-## 7. Testing y Mocking (Pruebas Aisladas)
-
-El proyecto utiliza una estrategia estricta de **Mocking** (`unittest.mock` / `pytest-mock`) para aislar las pruebas de los servicios externos. 
-
-**¿Por qué usamos Mocks?**
-- **Cero Costo:** Las pruebas no hacen llamadas reales a la API de Google Gemini, evitando gastar cuota durante el desarrollo continuo.
-- **Velocidad y Determinismo:** Las pruebas corren en milisegundos y no fallan por problemas de red o latencia de la API.
-- **Aislamiento:** Se simulan las respuestas de la Base de Datos Vectorial y del LLM para probar exclusivamente la *lógica interna* de nuestra aplicación (manejo de errores, parsing de Pydantic, ruteo del agente).
-
-**Archivos de prueba:**
-- **test_agents.py:** Inicialización del agente LangGraph y simulación del flujo de nodos.
-- **test_ingestion.py:** Carga JSON, manejo de PDFs corruptos.
-- **test_rag.py:** Simulación de búsquedas vectoriales y respuestas de Gemini exitosas/fallidas.
-- **test_schemas.py:** Validación de instanciación de esquemas Pydantic.
-- **test_security.py:** Validación de archivos, path traversal, límites (sin dependencias externas).
-
-## 8. Ejecución
-
+### Comandos de Mantenimiento
 ```bash
-# Desarrollo
-cd src && streamlit run app.py
+# Sincronizar dependencias
+uv sync
 
-# Tests
-pytest tests/
+# Ejecutar suite de pruebas
+uv run pytest tests/ -v
 
-# Reset de Base de Datos
-rm data/processed_docs.json
+# Limpiar memoria del sistema (Hard Reset)
+rm -rf data/*
 ```
 
-```
+---
 
-```
+_Documento técnico oficial del proyecto AI-Mentor Hub. Actualizado: Mayo 2026._
