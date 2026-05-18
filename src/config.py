@@ -9,7 +9,7 @@ VECTOR_DB_PATH = os.path.join(DATA_DIR, "processed_docs.json")
 
 # Modelo de Google (único para todas las operaciones)
 # MODELO_AGENTE = "gemini-3.1-flash-lite-preview" # Seguido esta muy ocupado
-MODELO_AGENTE = "gemini-3-flash-preview"
+MODELO_AGENTE = "gemini-3.1-flash-lite-preview" # "gemini-3-flash-preview"
 
 # Parámetros de Embeddings
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
