@@ -128,8 +128,14 @@ dependencies = [
     "tzdata==2025.3",
     "urllib3==2.6.3",
     "uuid-utils==0.14.1",
+    "watchdog>=6.0.0",
     "websockets==16.0",
     "xxhash==3.6.0",
     "yarl==1.23.0",
     "zstandard==0.25.0",
+]
+
+[dependency-groups]
+dev = [
+    "watchdog>=6.0.0",
 ]
