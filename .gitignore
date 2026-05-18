@@ -30,6 +30,9 @@ data/processed_docs.json
 # (Opcional) Descomenta la siguiente línea si no quieres subir los PDFs originales
 data/*.pdf
 data/*.json
+data/*.db
+data/*.db-*
+
 
 # =========================
 # Archivos del Sistema Operativo
@@ -66,10 +69,13 @@ requirements_pip.txt
 src/other/
 data_utel/
 data_ai/
+data_food/
 
 README_1o.md
 Lineamientos_Proyecto_Final_Bootcamp_AI_Engineer.pdf
 UPDATES.md
 GEMINI.md
+
+agent_memory.*
 
 
